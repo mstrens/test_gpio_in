@@ -1,0 +1,90 @@
+
+// seems OK : Check what happens with ramping when pwm is enabled (and the irq still continues to run)
+
+
+add setting PWM output on passive when debugging for CCU4 like it is done for CCU8 (in main - init part)
+    this make sense when CCU4 is used for torque sensor PWM
+    Currently, it is not implemented
+
+
+change some parameters (max current, battery volt,...)    
+    - BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 (to change in main.h) Currently 87 mvolt/adc10bits; in tsdz8, value is not linear between 5,12,36V????
+        DIFFERENCE_CUT_OFF_SHUTDOWN_10_BIT should perhaps also be changed if ratio is different
+    - change BATTERY_LOW_VOLTAGE_CUT_OFF ; set to 10V for testing, but was 39 for 48V battery
+        - we also have ui16_adc_voltage_cut_off = 300*100/BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000; // 30Volt default value (at least for testing)
+    - BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100 ; TSDZ2 uses 16; this match the theoretical value but not the measured!!!!!!!!!
+        test measurement gives 1,1A <=> 60 adc steps12 bits ; 1,1 = 15 steps adc 10bits ; so 0,07A/step10 bits = 7 when X100
+        In theory: R= 0.003 ohm, so 1A => 0,003V before Ampli; after Ampli = 0,03V
+        5V adc => 4096 adc 12bits; so 1A => 4096/5V*0,03V = 24,5 steps/A ; so 1A/24,5 = 0,04A/step12 bit ; so 0,16A/step10bit  , so 16 when X100
+    - pehaps ui8_pedal_torque_per_10_bit_ADC_step_x100 has to be adapted
+    - MOTOR_CHECK_ERPS_THRESHOLD has probably to be changed because the number of poles is different for tsdz8
+        - it was 20 for tsdz2 ; it becomes 10 for tsdz8 (4 poles instead of 8)
+    - MOTOR_BLOCKED_BATTERY_CURRENT_THRESHOLD_X10 (to adapt perhaps if ADC ratio is different)
+        - it was 30A in tsdz2; it is reduced to 5A for testing + ADC ratio should be checked
+    - MOTOR_BLOCKED_ERPS_THRESHOLD to be changed perhaps because pole is different
+        - it was 20 in tsdz2; reduced to 10 for tsdz8 (4 poles instead of 8)
+    - ADC_THROTTLE_MIN_VALUE_THRESHOLD to be changed if ADC ratio is different
+    - MOTOR_SPEED_FIELD_WEAKENING_MIN is 490 in tsdz2 ; it is compared to erps; so it should probably be reduced too??????
+        ???????? to check
+    - FOC_ANGLE_MULTIPLIER has probably to be adapted because L (inductance) is different (and also erps)
+    - if ADC ratio for current is different, change those values
+        - #define ADC_10_BIT_BATTERY_EXTRACURRENT				50  //  8 amps
+        - #define ADC_10_BIT_BATTERY_CURRENT_MAX				112	// 18 amps // 1 = 0.16 Amp
+        -define ADC_10_BIT_MOTOR_PHASE_CURRENT_MAX			187	// 30 amps // 1 = 0.16 Amp
+        Anyway for testing, I reduced them by a factor 3 : to 15, 40 and 60
+    - to be checked : #define CADENCE_SENSOR_NUMBER_MAGNETS				20U
+    
+
+Review all parameters in config.h
+    - ENABLE_THROTTLE
+
+
+After debugging : 
+- Remove some printf in main (used for debug)
+- in ebike_app_controller, remove the code that force the current on a fixed value in order to enable the switch on riding mode
+- in ebike_app_controller(), enable the counter to perform some tasks only once on 4 *25ms (and not only check_system() 
+- Change/Add code for eeprom and initialisation for m_configuration when eeprom is in use
+- enable E02 ERROR_TORQUE_SENSOR code when torque sensor will be implemented (currently put as comment)
+- in ebike_app.c there is volatile uint8_t ui8_motor_enabled = 0; ; it was set on 1 initially.
+    I changed it to 0 to let the code force an enable automatically and so use a low value for g_duty_cycle
+- there was a set up #define PWM_DUTY_CYCLE_MAX 255 in ebike_app.c
+    there is an issue in motor because this generates a PWM compare value that exceeds the period (1680 = 4*420)
+    furthermore in motor.c, the code that increases the g_duty_cycle does not take action whe g_duty_cycle is at 255
+    So current can exceed the max; 
+    For testing, I reduced PWM_DUTY_CYCLE_MAX to 128 in main.h 
+
+In tsdz2, in main.h we had MOTOR_ROTOR_OFFSET_ANGLE2 = 64 wich is 90°; it does not turn. I try with another value 21 = 30°
+
+Add reading PAS 1 and 2 and cadence calculation in motor.c
+Add a CCU4 timer to provide torque sensor signal and activate the out pin in device generator
+Add code to read and use torque sensor signal
+Add code for Wheel speed sensor detection
+Add code to save (in eeprom) actual battery consumption when power goes low (in tsdz2 at the end of the IRQ 19 kz when volt goes low) 
+Add code for throttle
+
+Note :  speed sensor, light, pas1 and PAS2, read of torque sensor & throttle,  are already initialized in device manager
+
+
+Note: about PWM signals for motor
+In tsdz2, we have:
+- OCiRef are high at begining of pwm cycle, Low in the middel and High at the end
+- Oci are the same because they use OCpolarity_high (and are LOW in case of a break because idlestate use RESET)
+- OCNi are the opposite because it is normally the opposite and because they use OCpolarity_high too (in case of break, they go HIGH because they use idelstate SET)
+- OCi are connected to High side of mosfet (pins C3,C2,C1)
+- OCiN is connected to Low side of mosfet (pins B2, B1, B0)
+So in TSDZ2, when running:
+- the High side is ON at beginning of PWM, it becomes OFF in the middle and ON at the end (OFF in case of break)
+- the Low side is OFF     "                           ON                    OFF           (ON in case of break)
+
+For TSDZ8, ST signal is LOW at the beginning of PWM and HIGH in the middle
+We use a set up that says invert ST on OUT0 and OUT0 is connected to the HIGH side
+So, OUT0 = HIGH side is HIGH at the begining of PWM
+This is the same as TSDZ2
+
+Note:
+in motor.c there are functions for motor_enable_pwm() and motor_disable_pwm()
+For TSDZ8, we stop 3 of the 4 slides to disable and we make a start of the 4 via a common cmd to enable in a synchronized way
+
+
+
+
