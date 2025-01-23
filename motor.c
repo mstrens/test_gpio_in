@@ -715,7 +715,7 @@ void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  counting DOW
         }
 
         // get brake state-
-        ui8_brake_state = XMC_GPIO_GetInput(IN_BRAKE_PORT, IN_BRAKE_PIN) == 0; // 0 means that brake is on
+        ui8_brake_state = XMC_GPIO_GetInput(IN_BRAKE_PORT, IN_BRAKE_PIN) == 0; // Low level means that brake is on
 
                 /****************************************************************************/
         // PWM duty_cycle controller:
@@ -798,7 +798,62 @@ void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  counting DOW
 
         /****************************************************************************/
         // Wheel speed sensor detection
-        // To be added
+        // 
+        static uint16_t ui16_wheel_speed_sensor_ticks_counter;
+        static uint8_t ui8_wheel_speed_sensor_ticks_counter_started;
+        static uint8_t ui8_wheel_speed_sensor_pin_state_old;
+
+        // check wheel speed sensor pin state
+        //ui8_temp = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN; // in tsdz2
+        uint8_t temp = (uint8_t) XMC_GPIO_GetInput(IN_SPEED_PORT, IN_SPEED_PIN);
+
+		// check wheel speed sensor ticks counter min value
+		if (ui16_wheel_speed_sensor_ticks) { ui16_wheel_speed_sensor_ticks_counter_min = ui16_wheel_speed_sensor_ticks >> 3; }
+		else { ui16_wheel_speed_sensor_ticks_counter_min = WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN >> 3; }
+
+		if (!ui8_wheel_speed_sensor_ticks_counter_started ||
+		  (ui16_wheel_speed_sensor_ticks_counter > ui16_wheel_speed_sensor_ticks_counter_min)) { 
+			// check if wheel speed sensor pin state has changed
+			if (ui8_temp != ui8_wheel_speed_sensor_pin_state_old) {
+				// update old wheel speed sensor pin state
+				ui8_wheel_speed_sensor_pin_state_old = ui8_temp;
+
+				// only consider the 0 -> 1 transition
+				if (ui8_temp) {
+					// check if first transition
+					if (!ui8_wheel_speed_sensor_ticks_counter_started) {
+						// start wheel speed sensor ticks counter as this is the first transition
+						ui8_wheel_speed_sensor_ticks_counter_started = 1;
+					}
+					else {
+						// check if wheel speed sensor ticks counter is out of bounds
+						if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX) {
+							ui16_wheel_speed_sensor_ticks = 0;
+							ui16_wheel_speed_sensor_ticks_counter = 0;
+							ui8_wheel_speed_sensor_ticks_counter_started = 0;
+						}
+						else {
+							ui16_wheel_speed_sensor_ticks = ui16_wheel_speed_sensor_ticks_counter;
+							ui16_wheel_speed_sensor_ticks_counter = 0;
+						}
+					}
+				}
+			}
+		}
+
+        // increment and also limit the ticks counter
+        if (ui8_wheel_speed_sensor_ticks_counter_started) {
+            if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN) {
+                ++ui16_wheel_speed_sensor_ticks_counter;
+            }
+			else {
+                // reset variables
+                ui16_wheel_speed_sensor_ticks = 0;
+                ui16_wheel_speed_sensor_ticks_counter = 0;
+                ui8_wheel_speed_sensor_ticks_counter_started = 0;
+            }
+        }
+
 
         /****************************************************************************/
         /*
@@ -812,7 +867,61 @@ void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  counting DOW
          * Then, starting form the second reference transition, the cadence is calculated based on counter value
          * All transitions are a reference for the stop detection counter (4 time faster stop detection):
          */
-        // to be added
+        ui8_temp = 0;
+        //if (PAS1__PORT->IDR & PAS1__PIN) {    // this was the code in TSDZ2
+        //    ui8_temp |= (unsigned char)0x01;
+		//}
+        //if (PAS2__PORT->IDR & PAS2__PIN) {
+        //    ui8_temp |= (unsigned char)0x02;
+		//}
+        ui8_temp = (uint8_t) (XMC_GPIO_GetInput(IN_PAS1_PORT, IN_PAS1_PIN ) || ( XMC_GPIO_GetInput(IN_PAS2_PORT, IN_PAS2_PIN ) <<1 ));
+        if (ui8_temp != ui8_pas_state_old) {
+            if (ui8_pas_state_old != ui8_pas_old_valid_state[ui8_temp]) {
+                // wrong state sequence: backward rotation
+                ui16_cadence_sensor_ticks = 0;
+                ui8_cadence_calc_ref_state = NO_PAS_REF;
+                goto skip_cadence;
+            }
+			
+			ui16_cadence_sensor_ticks_counter_min = ui16_cadence_ticks_count_min_speed_adj;
+			
+            if (ui8_temp == ui8_cadence_calc_ref_state) {
+                // ui16_cadence_calc_counter is valid for cadence calculation
+                ui16_cadence_sensor_ticks = ui16_cadence_calc_counter;
+                ui16_cadence_calc_counter = 0;
+                // software based Schmitt trigger to stop motor jitter when at resolution limits
+                ui16_cadence_sensor_ticks_counter_min += CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD;
+            }
+			else if (ui8_cadence_calc_ref_state == NO_PAS_REF) {
+                // this is the new reference state for cadence calculation
+                ui8_cadence_calc_ref_state = ui8_temp;
+                ui16_cadence_calc_counter = 0;
+            }
+			else if (ui16_cadence_sensor_ticks == 0) {
+                // Waiting the second reference transition: set the cadence to 7 RPM for immediate start
+                ui16_cadence_sensor_ticks = CADENCE_TICKS_STARTUP;
+            }
+
+            skip_cadence:
+            // reset the counter used to detect pedal stop
+            ui16_cadence_stop_counter = 0;
+            // save current PAS state
+            ui8_pas_state_old = ui8_temp;
+        }
+
+        if (++ui16_cadence_stop_counter > ui16_cadence_sensor_ticks_counter_min) {
+            // pedals stop detected
+            ui16_cadence_sensor_ticks = 0;
+            ui16_cadence_stop_counter = 0;
+            ui8_cadence_calc_ref_state = NO_PAS_REF;
+        }
+		else if (ui8_cadence_calc_ref_state != NO_PAS_REF) {
+            // increment cadence tick counter
+            ++ui16_cadence_calc_counter;
+        }
+
+
+
 
         // original perform also a save of some parameters (battery consumption)
             // here ui16_a, b, c = the values to be filled in pwm timers

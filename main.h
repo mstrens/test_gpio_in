@@ -93,7 +93,7 @@
 
 #define TEST_WITH_FIXED_PARAMETERS (1)  // for testing without speed sensor, torque sensor nor Throttle, we use here fixed parameters
         // Most fixed parameters are set up in ebike_app.c but to avoid lot of program changes, we also set here a reduced value to PWM_DUTY_CYCLE_MAX)
-#define CALIBRATE_HALL_SENSORS (1) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
+#define CALIBRATE_HALL_SENSORS (0) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
 
 // duty cycle
 #if ((TEST_WITH_FIXED_PARAMETERS == 1) || (CALIBRATE_HALL_SENSORS == 1)) 
@@ -103,7 +103,7 @@
 #endif
 #define PWM_DUTY_CYCLE_STARTUP								30    // Initial PWM Duty Cycle at motor startup
 
-	
+
 
 
 // ----------------------------------------------------------------------------------------------------------------

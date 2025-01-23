@@ -42,6 +42,9 @@
 
 #include "cy_retarget_io.h"
 
+#include "SEGGER_RTT.h"
+
+
 #define MY_ENABLED 1
 #define MY_DISABLED 0
 #define uCPROBE_GUI_OSCILLOSCOPE MY_DISABLED // ENABLED
@@ -213,6 +216,8 @@ int main(void)
     #if(uCPROBE_GUI_OSCILLOSCOPE == MY_ENABLED)
     ProbeScope_Init(20000);
     #endif
+    // init segger to allow kind of printf
+    SEGGER_RTT_Init ();
 
     // set the PWM in such a way that PWM are set to passive levels when processor is halted for debugging (safety)
     XMC_CCU8_SetSuspendMode(ccu8_0_HW, XMC_CCU8_SUSPEND_MODE_SAFE_STOP);
@@ -284,6 +289,10 @@ int main(void)
     #if (SEND_FRAME_100MS)   // for debugging
     uint32_t send_frame_ticks = system_ticks;
     #endif
+
+    // just to test 
+    SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
+    SEGGER_RTT_WriteString(0, RTT_CTRL_CLEAR); // clear the RTT terminal
 
     /*
     // to test the performance of the divider of XMC13
@@ -498,6 +507,11 @@ void print_hall_pattern_debug(){
                 hall_pattern_intervals[1],hall_pattern_intervals[2],hall_pattern_intervals[3],
                 hall_pattern_intervals[4],hall_pattern_intervals[5],hall_pattern_intervals[6] );
         printf("irq0= %ld\r\n", (uint32_t) debug_time_ccu8_irq0);
+        //SEGGER_RTT_WriteString(0, "SEGGER Real-Time-Terminal Sample\r\n\r\n");
+        SEGGER_RTT_printf(0, "idx=%3u dc=%3u, ct=%4u \r\n",debug_values_copy[0], debug_values_copy[1],debug_values_copy[2]);
+        // %[flags][FieldWidth][.Precision]ConversionSpecifier%
+        // c	one char , d signed integer, u unsigned integer , x	hexadecimal integer , s	string , p  pointer?  8-digit hexadecimal integer. (Argument shall be a pointer to void.)
+
     }
 }
 
