@@ -105,7 +105,7 @@ static uint32_t ui32_adc_battery_power_max_x1000_array[2];
 static uint16_t ui16_motor_speed_erps = 0;
 
 // cadence sensor
-volatile uint16_t ui16_cadence_ticks_count_min_speed_adj = CADENCE_SENSOR_CALC_COUNTER_MIN;
+volatile uint16_t ui16_cadence_ticks_count_min_speed_adj = CADENCE_SENSOR_CALC_COUNTER_MIN; //4270 
 static uint8_t ui8_pedal_cadence_RPM = 0;
 static uint8_t ui8_motor_deceleration = MOTOR_DECELERATION;
 
@@ -148,7 +148,7 @@ static uint32_t ui32_odometer_compensation_mm = ZERO_ODOMETER_COMPENSATION;
 // throttle control
 static uint8_t ui8_adc_throttle_assist = 0;
 static uint8_t ui8_throttle_adc_in = 0;
-static uint8_t ui8_throttle_mode_array[2] = {THROTTLE_MODE,STREET_MODE_THROTTLE_MODE};
+static uint8_t ui8_throttle_mode_array[2] = {THROTTLE_MODE,STREET_MODE_THROTTLE_MODE}; // this variable is never updated (so based only on config)
 
 // cruise control
 static uint8_t ui8_cruise_threshold_speed_x10_array[2] = {CRUISE_OFFROAD_THRESHOLD_SPEED_X10,CRUISE_STREET_THRESHOLD_SPEED_X10};
@@ -496,7 +496,7 @@ static void ebike_control_motor(void) // is called every 25ms by ebike_app_contr
 
     // select optional ADC function
 	#if (OPTIONAL_ADC_FUNCTION == THROTTLE_CONTROL)
-	if (ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled]) {
+	if (ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled]) { //  0 means that Throttle is "disabled"
 		apply_throttle();
 	}
 	#elif (OPTIONAL_ADC_FUNCTION == TEMPERATURE_CONTROL)
@@ -538,15 +538,10 @@ static void ebike_control_motor(void) // is called every 25ms by ebike_app_contr
 	  ||(!ui8_assist_level)
 	  ||(!ui8_riding_mode_parameter)
 	  ||((ui8_system_state != NO_ERROR)&&(!m_configuration_variables.ui8_assist_with_error_enabled))) {
-		ui8_assist_level++;
-		ui8_riding_mode_parameter++;
-        ui8_controller_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT; // 194
+		ui8_controller_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT; // 194
         ui8_controller_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN; // 73
         ui8_controller_adc_battery_current_target = 0;
         ui8_controller_duty_cycle_target = 0;
-		ui8_assist_level--;
-		ui8_riding_mode_parameter--;
-        
     }
 	else { // motor can run (no safety issue)
         // limit max current if higher than configured hardware limit (safety) 
@@ -1334,29 +1329,32 @@ static void apply_torque_sensor_calibration(void)
 static void apply_throttle(void)
 {
     // map adc value from 0 to 255
-    ui8_throttle_adc_in = map_ui8((uint8_t)(ui16_adc_throttle >> 2), // from 10 bits to 8 bits
-            (uint8_t) ADC_THROTTLE_MIN_VALUE,
-            (uint8_t) ADC_THROTTLE_MAX_VALUE,
+	//Next line has been moved from motor.c to here to save time in irq 1 ; >>2 because we use 10 bits instead of 12 bits
+	ui16_adc_throttle = (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0x0FFF) >> 2; // throttle gr1 ch7 result 5  in bg  p2.5
+        
+    ui8_throttle_adc_in = map_ui8((uint8_t)(ui16_adc_throttle >> 2), // from 10 bits to 8 bits; then remap from 0 to 255
+            (uint8_t) ADC_THROTTLE_MIN_VALUE, // 47
+            (uint8_t) ADC_THROTTLE_MAX_VALUE, // 176
             (uint8_t) 0,
             (uint8_t) 255);
 	
 	// / set throttle assist
-	if (ui8_throttle_adc_in) {
-		ui8_adc_throttle_assist = ui8_throttle_adc_in;
+	if (ui8_throttle_adc_in) {  
+		ui8_adc_throttle_assist = ui8_throttle_adc_in; // mstrens this could be done in all cases
 	}
 	else {
 		ui8_adc_throttle_assist = 0;
 	}
 	
-	// throttle mode pedaling
+	// throttle mode pedaling ; Set assist on 0 when other conditions does not match
 	switch (ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled]) {
-        case PEDALING:
+        case PEDALING: // Throttle assist only when pedaling
 			if (!ui8_pedal_cadence_RPM) {
 				ui8_adc_throttle_assist = 0;
 			}
           break;
-        case W_O_P_6KM_H_AND_PEDALING:
-			if ((ui16_wheel_speed_x10 > WALK_ASSIST_THRESHOLD_SPEED_X10)
+        case W_O_P_6KM_H_AND_PEDALING: // Set assist on 0 when when speed is more than 6km/h and not pedaling 
+			if ((ui16_wheel_speed_x10 > WALK_ASSIST_THRESHOLD_SPEED_X10) // 60 =  6km/h
 			  &&(!ui8_pedal_cadence_RPM)) {
 				ui8_adc_throttle_assist = 0;
 			}
@@ -1370,14 +1368,14 @@ static void apply_throttle(void)
             (uint8_t) 0,
             (uint8_t) 255,
             (uint8_t) 0,
-            (uint8_t) ui8_adc_battery_current_max);
+            (uint8_t) ui8_adc_battery_current_max); // in TSDZ2 it was 112 for 18A
 	
     if (ui8_adc_battery_current_target_throttle > ui8_adc_battery_current_target) {
         // set motor acceleration / deceleration
-        if (ui16_wheel_speed_x10 >= 255) {
+        if (ui16_wheel_speed_x10 >= 255) {  // when more than 25 km/h set 
             ui8_duty_cycle_ramp_up_inverse_step = THROTTLE_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN; // 48
             ui8_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN; // 9
-        }
+        }  // those tests are not required because the map function already set the limits
 		else {
             ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
                     (uint8_t) 40,
@@ -1408,7 +1406,9 @@ static void apply_throttle(void)
 
 static void apply_temperature_limiting(void)
 {
-    // get ADC measurement
+    // next line has bee moved from motor.c to here to save time in irq 1
+	ui16_adc_throttle = (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0xFFFF) >> 2; // throttle gr1 ch7 result 5  in bg  p2.5    
+	// get ADC measurement
     uint16_t ui16_temp = ui16_adc_throttle;
 
     // filter ADC measurement to motor temperature variable
@@ -1468,8 +1468,9 @@ static void calc_wheel_speed(void)
         // rps = PWM_CYCLES_SECOND / ui16_wheel_speed_sensor_ticks (rev/sec)
         // km/h*10 = rps * ui16_wheel_perimeter * ((3600 / (1000 * 1000)) * 10)
         // !!!warning if PWM_CYCLES_SECOND is not a multiple of 1000
+		// mstrens : PWM_CYCLES_SECOND = 19047
         ui16_wheel_speed_x10 = (uint16_t)(((uint32_t) m_configuration_variables.ui16_wheel_perimeter * ((PWM_CYCLES_SECOND/1000)*36U)) / ui16_tmp);
-    }
+	}
 	else {
 		ui16_wheel_speed_x10 = 0;
     }
@@ -1485,8 +1486,8 @@ static void calc_cadence(void)
     ui16_cadence_ticks_count_min_speed_adj = map_ui16(ui16_wheel_speed_x10,
             40,
             400,
-            CADENCE_SENSOR_CALC_COUNTER_MIN,
-            CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED);
+            CADENCE_SENSOR_CALC_COUNTER_MIN,  // 4270     // at 4 km/h
+            CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED); //341  // at 40 km/h
 
     // calculate cadence in RPM and avoid zero division
     // !!!warning if PWM_CYCLES_SECOND > 21845
@@ -1544,7 +1545,9 @@ static void get_pedal_torque(void)
 	
 	static uint8_t toffset_cycle_counter = 0;
 	uint16_t ui16_temp = 0;
-	
+	// this has been moved from motor.c to here in order to save time in the irq
+	ui16_adc_torque   = (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ) & 0xFFFF) >> 2; // torque gr0 ch7 result 2 in bg p2.2
+        
     if (toffset_cycle_counter < TOFFSET_CYCLES) {
         uint16_t ui16_tmp = ui16_adc_torque; // ui16_adc_torque is captured in motor.h ; it could best be captured here
         ui16_adc_pedal_torque_offset_init = filter(ui16_tmp, ui16_adc_pedal_torque_offset_init, 2);
@@ -1842,18 +1845,19 @@ static uint8_t ui8_motor_check_goes_alone_timer = 0U;
 #define ADC_THROTTLE_MIN_VALUE_THRESHOLD		(uint8_t)(ADC_THROTTLE_MIN_VALUE + 5)
 
     static uint8_t ui8_throttle_check_counter;
-	
+	// next line has been copied from motor.c to save time in irq 1
+	ui16_adc_throttle = (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0xFFFF) >> 2; // throttle gr1 ch7 result 5  in bg  p2.5    	
 	if (ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled]) {
-		if (ui8_throttle_check_counter < THROTTLE_CHECK_COUNTER_THRESHOLD) {
+		if (ui8_throttle_check_counter < THROTTLE_CHECK_COUNTER_THRESHOLD) { // 20
 			ui8_throttle_check_counter++;
 		
-			if ((ui16_adc_throttle >> 2) > ADC_THROTTLE_MIN_VALUE_THRESHOLD) {
-				ui8_system_state = ERROR_THROTTLE;
+			if ((ui16_adc_throttle >> 2) > ADC_THROTTLE_MIN_VALUE_THRESHOLD) { //47+5
+				ui8_system_state = ERROR_THROTTLE;   // throttle may not ve activated at the beginning.
 			}
 		}
 		else {
 			if ((ui8_system_state == ERROR_THROTTLE)
-			  &&((ui16_adc_throttle >> 2) < ADC_THROTTLE_MIN_VALUE_THRESHOLD)) {
+			  &&((ui16_adc_throttle >> 2) < ADC_THROTTLE_MIN_VALUE_THRESHOLD)) { //47+5
 				// reset throttle error code
 				ui8_system_state = NO_ERROR;
 			}	

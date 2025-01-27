@@ -123,7 +123,7 @@ extern volatile uint32_t posif_SR1;
 extern volatile uint32_t posif_print_current_pattern ;
 
 extern volatile uint32_t hall_pattern_irq;                   // current hall pattern
-extern volatile uint16_t hall_pattern_change_ticks_irq; // ticks from ccu4 slice 3 for last pattern change
+extern volatile uint16_t hall_pattern_change_ticks_irq; // ticks from ccu4 slice 2 for last pattern change
 extern volatile uint16_t ui16_a ;
 extern volatile uint16_t ui16_b ;
 extern volatile uint16_t ui16_c ;
@@ -131,11 +131,17 @@ extern uint8_t ui8_svm_table_index_print  ;
 extern uint16_t ui16_temp_print  ;
 extern uint16_t ui16_a_print ;
 extern uint16_t ui16_new_angle_print; 
-uint16_t ccu4_S3_timer ; 
+uint16_t ccu4_S2_timer ; 
 extern uint16_t current_average ;
 extern uint16_t hall_pattern_intervals[8];
 
-extern uint16_t debug_time_ccu8_irq0;
+extern volatile uint16_t debug_time_ccu8_irq0; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+extern volatile uint16_t debug_time_ccu8_irq1; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+extern volatile uint16_t debug_time_ccu8_irq1b; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+extern volatile uint16_t debug_time_ccu8_irq1c; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+extern volatile uint16_t debug_time_ccu8_irq1d; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+extern volatile uint16_t debug_time_ccu8_irq1e; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+
 
 /*******************************************************************************
 * Function Name: SysTick_Handler
@@ -217,7 +223,9 @@ int main(void)
     ProbeScope_Init(20000);
     #endif
     // init segger to allow kind of printf
-    SEGGER_RTT_Init ();
+    SEGGER_RTT_Init ();     
+    SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
+    SEGGER_RTT_WriteString(0, RTT_CTRL_CLEAR); // clear the RTT terminal
 
     // set the PWM in such a way that PWM are set to passive levels when processor is halted for debugging (safety)
     XMC_CCU8_SetSuspendMode(ccu8_0_HW, XMC_CCU8_SUSPEND_MODE_SAFE_STOP);
@@ -260,11 +268,11 @@ int main(void)
     // use CCU4 SR0 (slice 1 external event from POSIT) to say that a correct event occured
     //NVIC_SetPriority(CCU40_0_IRQn, 1U); //Testing with SR 0 when POSIF detect a valid transition (for debug)
 	//NVIC_EnableIRQ(CCU40_0_IRQn);
-    NVIC_SetPriority(CCU40_1_IRQn, 0U); //capture hall pattern and slice 3 time when a hall change occurs
+    NVIC_SetPriority(CCU40_1_IRQn, 0U); //capture hall pattern and slice 2 time when a hall change occurs
 	NVIC_EnableIRQ(CCU40_1_IRQn);
     
 
-    /* CCU80_0_IRQn and CCU80_1_IRQn. slice 4 interrupt on counting up and down. at 19 khz to manage rotating flux*/
+    /* CCU80_0_IRQn and CCU80_1_IRQn. slice 3 interrupt on counting up and down. at 19 khz to manage rotating flux*/
 	NVIC_SetPriority(CCU80_0_IRQn, 1U);
 	NVIC_EnableIRQ(CCU80_0_IRQn);
     NVIC_SetPriority(CCU80_1_IRQn, 1U);
@@ -276,6 +284,12 @@ int main(void)
     
     /* Enable Global Start Control CCU80  in a synchronized way*/
     XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
+    uint32_t retry_counter = 10;
+    while ((!XMC_CCU8_SLICE_IsTimerRunning(PHASE_U_TIMER_HW)) && (retry_counter > 0)){
+        XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
+        //SEGGER_RTT_printf(0, "Retry CCU8 start; still %u try\r\n", retry_counter);
+    }
+
 
     // todo : change when eeprom is coded properly add some initialisation (e.g. m_configuration_init() and ebike_app.init)
     m_configuration_init();
@@ -290,10 +304,7 @@ int main(void)
     uint32_t send_frame_ticks = system_ticks;
     #endif
 
-    // just to test 
-    SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
-    SEGGER_RTT_WriteString(0, RTT_CTRL_CLEAR); // clear the RTT terminal
-
+    
     /*
     // to test the performance of the divider of XMC13
     uint32_t numerator = 1234567;
@@ -334,14 +345,6 @@ int main(void)
             #if (uCPROBE_GUI_OSCILLOSCOPE == MY_ENABLED)
             ProbeScope_Sampling(); // this should be moved e.g. in a interrupt that run faster
             #endif
-            /*
-            // read gpio Input to debug
-            speed = XMC_GPIO_GetInput(IN_SPEED_PORT , IN_SPEED_PIN); // read the gpio for speed sensor
-            pas_1 = XMC_GPIO_GetInput(IN_PAS1_PORT , IN_PAS1_PIN); // read the gpio for pas1 sensor ; it is OK
-            //uart_rx = XMC_GPIO_GetInput(CYBSP_DEBUG_UART_RX_PORT, CYBSP_DEBUG_UART_RX_PIN);
-            brake = XMC_GPIO_GetInput(IN_BRAKE_PORT,IN_BRAKE_PIN); // it is OK
-            unknown = XMC_GPIO_GetInput(IN_UNKNOWN_PORT,IN_UNKNOWN_PIN); // do not know how to use it
-            */
             // send Hello
             /*
             for (index = 0; index < sizeof(message) - 1; index++)
@@ -369,10 +372,13 @@ int main(void)
         // for debug
         
         if (new_hall) {
-            ccu4_S3_timer = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
-            printf("angle= %ld pins= %lx a=%ld b=%ld c=%ld tim=%ld\r\n ",
+            ccu4_S2_timer = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
+            //SEGGER_RTT_printf(0,"angle= %u pins= %u a=%u b=%u c=%u tim=%u\r\n ",
+            //    (uint32_t) ui16_new_angle_print , (uint32_t) hall_print_pos , (uint32_t) ui16_a , (uint32_t)ui16_b , (uint32_t)ui16_c ,
+            //     (uint32_t)ccu4_S2_timer);
+            printf("angle= %u pins= %u a=%u b=%u c=%u tim=%u\r\n ",
                 (uint32_t) ui16_new_angle_print , (uint32_t) hall_print_pos , (uint32_t) ui16_a , (uint32_t)ui16_b , (uint32_t)ui16_c ,
-                 (uint32_t)ccu4_S3_timer);
+                 (uint32_t)ccu4_S2_timer);
             new_hall = false;
         }
         
@@ -390,7 +396,7 @@ int main(void)
        }
        #if (ENABLE_DEBUG_HALL_PATTERN == 1)
        print_hall_pattern_debug();
-       //print_hall_pattern_debug2();    
+       //print_hall_pattern_debug2();
        #endif
        
        
@@ -482,7 +488,7 @@ void print_system_state(){
 
 
 void print_hall_pattern_debug(){
-    if (take_action(0, 500)){ // every 500ms
+    if (take_action(0, 250)){ // every 500ms
         debug_values_copy[0] = debug_values[0] ; // ui8_svm_table_index
         debug_values_copy[1] = debug_values[1] ; // ui8_g_duty_cycle;
         debug_values_copy[2] = debug_values[2] ; // ui8_controller_adc_battery_current_target;
@@ -499,19 +505,38 @@ void print_hall_pattern_debug(){
         uint32_t current_adc = (uint32_t) (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ) & 0xFFFF); // current adc
         // current_average (calculated based on the 2 VADC on pin 2.8) for the same value of hall debug offset 
         // 6 ticks intervals between hall patern changes
-        printf("idx= %ld dc=%ld ct=%ld cf=%ld cty=%ld ia=%ld et=%ld ct=%ld hct=%ld hpe=%ld hpv=%ld dct=%ld doa=%ld cadc=%ld cavg=%ld, 1=%u 2=%u 3=%u 4=%u  5=%u  6=%u \r\n",
-            debug_values_copy[0], debug_values_copy[1],
-                debug_values_copy[2], debug_values_copy[3], debug_values_copy[4] , debug_values_copy[5],
-                debug_values_copy[6], debug_values_copy[7], debug_values_copy[8],
-                debug_values_copy[9], debug_values_copy[10] ,debug_values_copy[11] , debug_values_copy[13] , current_adc, current_average,
-                hall_pattern_intervals[1],hall_pattern_intervals[2],hall_pattern_intervals[3],
-                hall_pattern_intervals[4],hall_pattern_intervals[5],hall_pattern_intervals[6] );
-        printf("irq0= %ld\r\n", (uint32_t) debug_time_ccu8_irq0);
-        //SEGGER_RTT_WriteString(0, "SEGGER Real-Time-Terminal Sample\r\n\r\n");
-        SEGGER_RTT_printf(0, "idx=%3u dc=%3u, ct=%4u \r\n",debug_values_copy[0], debug_values_copy[1],debug_values_copy[2]);
+        SEGGER_RTT_WriteString(0, "SEGGER Real-Time-Terminal Sample\r\n\r\n");
+        printf("idx=%u dc=%u ct=%u cf=%u cty=%u ia=%u et=%u ct=%0u hct=%u hpe=%u hpv=%u dct=%u doa=%u cadc=%u cavg=%u, 1=%u 2=%u 3=%u 4=%u  5=%u  6=%u\r\n",
+            debug_values_copy[0], debug_values_copy[1],debug_values_copy[2],
+            debug_values_copy[3], debug_values_copy[4] , debug_values_copy[5],
+            debug_values_copy[6], debug_values_copy[7], debug_values_copy[8],
+            debug_values_copy[9], debug_values_copy[10] ,debug_values_copy[11] , debug_values_copy[13] , current_adc, current_average,
+            hall_pattern_intervals[1],hall_pattern_intervals[2],hall_pattern_intervals[3],
+            hall_pattern_intervals[4],hall_pattern_intervals[5],hall_pattern_intervals[6] );
+        
+        /*
+        SEGGER_RTT_printf(0, "idx=%-3u dc=%-3u ct=%-4u cf=%-4u cty=%-4u ia=%-6u et=%-5u ct=%-10u hct=%-5u hpe=%-3u hpv=%-3u dct=%-3u doa=%-3u cadc=%-4u cavg=%-4u, 1=%-4u 2=%-4u 3=%-4u 4=%-4u  5=%-4u  6=%-4u\r\n",
+            debug_values_copy[0], debug_values_copy[1],debug_values_copy[2],
+            debug_values_copy[3], debug_values_copy[4] , debug_values_copy[5],
+            debug_values_copy[6], debug_values_copy[7], debug_values_copy[8],
+            debug_values_copy[9], debug_values_copy[10] ,debug_values_copy[11] , debug_values_copy[13] , current_adc, current_average,
+            hall_pattern_intervals[1],hall_pattern_intervals[2],hall_pattern_intervals[3],
+            hall_pattern_intervals[4],hall_pattern_intervals[5],hall_pattern_intervals[6] );
+        */    
         // %[flags][FieldWidth][.Precision]ConversionSpecifier%
         // c	one char , d signed integer, u unsigned integer , x	hexadecimal integer , s	string , p  pointer?  8-digit hexadecimal integer. (Argument shall be a pointer to void.)
-
+        printf("in irq0=%uus irq1=%uus irq1b=%uus irq1c=%uus irq1d=%uus irq1e=%uus\r\n", 
+            debug_time_ccu8_irq0 << 2,debug_time_ccu8_irq1 << 2,debug_time_ccu8_irq1b << 2,
+            debug_time_ccu8_irq1c << 2,debug_time_ccu8_irq1d << 2,debug_time_ccu8_irq1e << 2);
+        debug_time_ccu8_irq0 = 0;
+        debug_time_ccu8_irq1 = 0;
+        debug_time_ccu8_irq1b = 0;
+        debug_time_ccu8_irq1c = 0;
+        debug_time_ccu8_irq1d = 0;
+        debug_time_ccu8_irq1e = 0;
+        #ifdef XMC_ASSERT_ENABLE
+        printf("XMC_ASSERT_ENABLE\n\r");
+        #endif
     }
 }
 
@@ -524,7 +549,7 @@ void print_hall_pattern_debug2(){
         printf("Now since pattern angle delay d_c_t d_c cur_t curr      error valid com_t rot_ticks ofa refV\r\n");
         for (uint32_t i = 0; i<LINES; i++){
             for (uint32_t j = 0; j<15; j++){
-                printf("%ld ", first_debug_values[i][j]);
+                printf("%u ", first_debug_values[i][j]);
                 if (j == 8) {    // put a space before the error counter
                     printf("    ");
                 }

@@ -64,6 +64,17 @@ Add code for throttle
 
 Note :  speed sensor, light, pas1 and PAS2, read of torque sensor & throttle,  are already initialized in device manager
 
+In ccu8 irq0, remove some code for debugging the 100 first steps
+In ccu8 irq0 (and main.c) reduce the data used for calibration to the minimum
+
+Make some test to verify if the values for HALL_COUNTER_OFFSET_DOWN and UP in motor.c are the best one.
+    The datasheet of an infineon hall sensor says that there is a delay of 16usec between magnetic field change and output change (can be max 30usec)
+    This seems much less than the value of 
+Check if ui8_foc_angle_multiplier is valid for TSDZ8
+
+In motor.c, there is a variable ui16_cadence_sensor_ticks_counter_min that is increased in some case but this does not seems consistent 
+    it is increased only when there is a valid change for the refrence (so only for 1 of the 4 patterns) 
+
 
 Note: about PWM signals for motor
 In tsdz2, we have:

@@ -3,6 +3,16 @@
     <Devices>
         <Device mpn="XMC1302-T038x0064">
             <BlockConfig>
+                <Block location="ioss[0].port[0].pin[11]">
+                    <Aliases>
+                        <Alias value="IN_UNKNOWN_0_11"/>
+                    </Aliases>
+                </Block>
+                <Block location="ioss[0].port[0].pin[12]">
+                    <Aliases>
+                        <Alias value="IN_UNKNOWN_0_12"/>
+                    </Aliases>
+                </Block>
                 <Block location="ioss[0].port[0].pin[14]">
                     <Aliases>
                         <Alias value="CYBSP_SWDIO"/>
@@ -16,6 +26,26 @@
                 <Block location="ioss[0].port[1].pin[3]">
                     <Aliases>
                         <Alias value="PWM_TORQUE"/>
+                    </Aliases>
+                </Block>
+                <Block location="ioss[0].port[1].pin[4]">
+                    <Aliases>
+                        <Alias value="IN_UNKNOWN_1_4"/>
+                    </Aliases>
+                </Block>
+                <Block location="ioss[0].port[2].pin[1]">
+                    <Aliases>
+                        <Alias value="IN_UNKNOWN_2_1"/>
+                    </Aliases>
+                </Block>
+                <Block location="ioss[0].port[2].pin[3]">
+                    <Aliases>
+                        <Alias value="UNKNOWN_P2_3"/>
+                    </Aliases>
+                </Block>
+                <Block location="ioss[0].port[2].pin[7]">
+                    <Aliases>
+                        <Alias value="UNKNOWN_P2_7"/>
                     </Aliases>
                 </Block>
                 <Block location="vadc[0].group[0].ch[0]">
@@ -142,7 +172,7 @@
                         <Param id="override_trigger_function" value="XMC_CCU4_SLICE_EVENT_NONE"/>
                         <Param id="override_value_function" value="XMC_CCU4_SLICE_EVENT_NONE"/>
                         <Param id="period_match_event_sr" value="0"/>
-                        <Param id="prescaler_initial_value" value="64"/>
+                        <Param id="prescaler_initial_value" value="1"/>
                         <Param id="prescaler_mode" value="XMC_CCU4_SLICE_PRESCALER_MODE_NORMAL"/>
                         <Param id="shadow_transfer_mode" value="XMC_CCU4_SLICE_SHADOW_TRANSFER_MODE_IN_PERIOD_MATCH_AND_ONE_MATCH"/>
                         <Param id="single_shot_mode" value="true"/>
@@ -151,9 +181,9 @@
                         <Param id="stop_function" value="XMC_CCU4_SLICE_EVENT_NONE"/>
                         <Param id="stop_function_mode" value="XMC_CCU4_SLICE_END_MODE_TIMER_STOP"/>
                         <Param id="timer_clear_control" value="XMC_CCU4_SLICE_TIMER_CLEAR_MODE_NEVER"/>
-                        <Param id="timer_compare_value" value="6"/>
+                        <Param id="timer_compare_value" value="2"/>
                         <Param id="timer_initial_value" value="0"/>
-                        <Param id="timer_period_value" value="11"/>
+                        <Param id="timer_period_value" value="4"/>
                         <Param id="trap_function" value="XMC_CCU4_SLICE_EVENT_NONE"/>
                     </Parameters>
                 </Personality>
@@ -884,7 +914,7 @@
                     <Parameters>
                         <Param id="inFlash" value="true"/>
                         <Param id="input_hysteresis" value="XMC_GPIO_INPUT_HYSTERESIS_STANDARD"/>
-                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_PULL_UP"/>
+                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_PULL_DOWN"/>
                         <Param id="io_function" value="XMC_GPIO_INPUT"/>
                         <Param id="output_level" value="XMC_GPIO_OUTPUT_LEVEL_LOW"/>
                         <Param id="output_mode" value="XMC_GPIO_MODE_OUTPUT_PUSH_PULL"/>
@@ -988,22 +1018,6 @@
                     </Parameters>
                 </Personality>
                 <Personality template="xmc_pin" version="1.0">
-                    <Block location="ioss[0].port[0].pin[11]" locked="true">
-                        <Aliases>
-                            <Alias value="IN_UNKNOWN"/>
-                        </Aliases>
-                    </Block>
-                    <Parameters>
-                        <Param id="inFlash" value="true"/>
-                        <Param id="input_hysteresis" value="XMC_GPIO_INPUT_HYSTERESIS_STANDARD"/>
-                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_TRISTATE"/>
-                        <Param id="io_function" value="XMC_GPIO_INPUT"/>
-                        <Param id="output_level" value="XMC_GPIO_OUTPUT_LEVEL_LOW"/>
-                        <Param id="output_mode" value="XMC_GPIO_MODE_OUTPUT_PUSH_PULL"/>
-                        <Param id="output_strength" value="XMC_GPIO_OUTPUT_STRENGTH_NONE"/>
-                    </Parameters>
-                </Personality>
-                <Personality template="xmc_pin" version="1.0">
                     <Block location="ioss[0].port[0].pin[13]" locked="true">
                         <Aliases>
                             <Alias value="IN_PAS2"/>
@@ -1100,22 +1114,6 @@
                     </Parameters>
                 </Personality>
                 <Personality template="xmc_pin" version="1.0">
-                    <Block location="ioss[0].port[2].pin[3]" locked="true">
-                        <Aliases>
-                            <Alias value="UNKNOWN_P2_3"/>
-                        </Aliases>
-                    </Block>
-                    <Parameters>
-                        <Param id="inFlash" value="true"/>
-                        <Param id="input_hysteresis" value="XMC_GPIO_INPUT_HYSTERESIS_STANDARD"/>
-                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_TRISTATE"/>
-                        <Param id="io_function" value="XMC_GPIO_INPUT_OUTPUT"/>
-                        <Param id="output_level" value="XMC_GPIO_OUTPUT_LEVEL_LOW"/>
-                        <Param id="output_mode" value="XMC_GPIO_MODE_OUTPUT_PUSH_PULL"/>
-                        <Param id="output_strength" value="XMC_GPIO_OUTPUT_STRENGTH_NONE"/>
-                    </Parameters>
-                </Personality>
-                <Personality template="xmc_pin" version="1.0">
                     <Block location="ioss[0].port[2].pin[4]" locked="true">
                         <Aliases>
                             <Alias value="BATTERY_P2_4"/>
@@ -1151,22 +1149,6 @@
                     <Block location="ioss[0].port[2].pin[6]" locked="true">
                         <Aliases>
                             <Alias value="VCC_P2_6"/>
-                        </Aliases>
-                    </Block>
-                    <Parameters>
-                        <Param id="inFlash" value="true"/>
-                        <Param id="input_hysteresis" value="XMC_GPIO_INPUT_HYSTERESIS_STANDARD"/>
-                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_TRISTATE"/>
-                        <Param id="io_function" value="XMC_GPIO_INPUT_OUTPUT"/>
-                        <Param id="output_level" value="XMC_GPIO_OUTPUT_LEVEL_LOW"/>
-                        <Param id="output_mode" value="XMC_GPIO_MODE_OUTPUT_PUSH_PULL"/>
-                        <Param id="output_strength" value="XMC_GPIO_OUTPUT_STRENGTH_NONE"/>
-                    </Parameters>
-                </Personality>
-                <Personality template="xmc_pin" version="1.0">
-                    <Block location="ioss[0].port[2].pin[7]" locked="true">
-                        <Aliases>
-                            <Alias value="UNKNOWN_P2_7"/>
                         </Aliases>
                     </Block>
                     <Parameters>

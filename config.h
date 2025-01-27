@@ -22,14 +22,14 @@
 #define MOTOR_TYPE 0  // 0 = 48V, 1 = 36V
 #define TORQUE_SENSOR_CALIBRATED 0
 #define MOTOR_ACCELERATION  35
-#define MOTOR_ASSISTANCE_WITHOUT_PEDAL_ROTATION 0
+#define MOTOR_ASSISTANCE_WITHOUT_PEDAL_ROTATION 0 // when enabled (1), assistance is provided when the pedal is pressed more than the thershold herafer
 #define ASSISTANCE_WITHOUT_PEDAL_ROTATION_THRESHOLD 20
-#define PEDAL_TORQUE_PER_10_BIT_ADC_STEP_X100 67
-#define PEDAL_TORQUE_ADC_MAX 300
+#define PEDAL_TORQUE_PER_10_BIT_ADC_STEP_X100 67    // used to calculate the correct ratio between the assistance factor and the human power + for total power
+#define PEDAL_TORQUE_ADC_MAX 300                    // value from ADC when max weigth is apply on one pedal
 #define STARTUP_BOOST_TORQUE_FACTOR 300
 #define MOTOR_BLOCKED_COUNTER_THRESHOLD 2
 #define MOTOR_BLOCKED_BATTERY_CURRENT_THRESHOLD_X10 5  // mstrens it was 30 for tsdz2, reduce it for testing
-#define MOTOR_BLOCKED_ERPS_THRESHOLD 10                // mstrens it was 20 for tsdz2, increase because 4 poles instead of 8
+#define MOTOR_BLOCKED_ERPS_THRESHOLD 10                // mstrens it was 20 for tsdz2, decreased because 4 poles instead of 8
 // 20 erps = 1200 erpm =  1200/8 rpm = 150 rpm => 600 erpm => 10erps for 4 poles
 #define STARTUP_BOOST_CADENCE_STEP 20       
 #define BATTERY_CURRENT_MAX        5                     // mstrens: it was 13 for tsdz2, reduce for testing
@@ -56,8 +56,8 @@
 #define WHEEL_MAX_SPEED 25
 #define ENABLE_LIGHTS 1
 #define ENABLE_WALK_ASSIST 1
-#define ENABLE_BRAKE_SENSOR 0
-#define ENABLE_THROTTLE 0
+#define ENABLE_BRAKE_SENSOR 1
+#define ENABLE_THROTTLE 1          // 1 enable
 #define ENABLE_TEMPERATURE_LIMIT 0
 #define ENABLE_STREET_MODE_ON_STARTUP 1
 #define ENABLE_SET_PARAMETER_ON_STARTUP 0
@@ -74,8 +74,8 @@
 #define STREET_MODE_SPEED_LIMIT 25
 #define STREET_MODE_THROTTLE_ENABLED 0
 #define STREET_MODE_CRUISE_ENABLED 0
-#define ADC_THROTTLE_MIN_VALUE 47
-#define ADC_THROTTLE_MAX_VALUE 176            // to check for TSDZ8
+#define ADC_THROTTLE_MIN_VALUE 47             // this is mapped to 0
+#define ADC_THROTTLE_MAX_VALUE 176            // to check for TSDZ8 ; this is mapped to 255
 #define MOTOR_TEMPERATURE_MIN_VALUE_LIMIT 65
 #define MOTOR_TEMPERATURE_MAX_VALUE_LIMIT 95
 #define ENABLE_TEMPERATURE_ERROR_MIN_LIMIT 0
@@ -84,7 +84,7 @@
 #define ENABLE_XH18 0
 #define ENABLE_DISPLAY_WORKING_FLAG 1
 #define ENABLE_DISPLAY_ALWAYS_ON 0
-#define ENABLE_WHEEL_MAX_SPEED_FROM_DISPLAY 0
+#define ENABLE_WHEEL_MAX_SPEED_FROM_DISPLAY 0 // allow to change the max speed from the display
 #define DELAY_MENU_ON 50
 #define COASTER_BRAKE_ENABLED 0
 #define COASTER_BRAKE_TORQUE_THRESHOLD 30
@@ -131,10 +131,10 @@
 #define CRUISE_TARGET_SPEED_LEVEL_4 24
 #define CRUISE_MODE_WALK_ENABLED 0
 #define CRUISE_THRESHOLD_SPEED 10
-#define PEDAL_TORQUE_ADC_OFFSET 150        // to be tested
+#define PEDAL_TORQUE_ADC_OFFSET 150        // to be tested; it is the ADC value when no pressured is applied on the pedal
 #define AUTO_DATA_NUMBER_DISPLAY 3
 #define UNITS_TYPE 0
-#define ASSIST_THROTTLE_MIN_VALUE 0
+#define ASSIST_THROTTLE_MIN_VALUE 0        // adc values are mapped between min and max values
 #define ASSIST_THROTTLE_MAX_VALUE 255
 #define STREET_MODE_WALK_ENABLED 1
 #define DATA_DISPLAY_ON_STARTUP 1
@@ -153,9 +153,12 @@
 #define SMOOTH_START_SET_PERCENT 35
 #define TEMPERATURE_SENSOR_TYPE 0
 #define CRUISE_MODE_ENABLED 1
-#define THROTTLE_MODE 0
-#define STREET_MODE_THROTTLE_MODE 0
+#define THROTTLE_MODE 0               // see below: when 0, throttle ADC is not used and converted; perhaps it is filled by java based on other parameters
+#define STREET_MODE_THROTTLE_MODE 0   // see below: with the display, it is probably possible to switch from THOTTLE_MODE to STREET_MODE_TROTTLE_MODE
 #define ASSIST_LEVEL_1_OF_5_PERCENT 60
 #define ALTERNATIVE_MILES 0
 
 #endif /* CONFIG_H_ */
+// THROTTLE_MODE and STREEMODE_THROTTLE_MODE can be Disabled (=0), pedaling (1), 6KM/h Only (2) , 6KM/h & pedaling (3), Unconditionnal (4)
+// Only with brake sensors enabled<br>\nSet Optional ADC to Throttle\n<html>");
+// for street mode, Trottle mode must be at the same or higher level

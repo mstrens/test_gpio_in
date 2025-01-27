@@ -97,5 +97,32 @@ Change the #define CALIBRATED_HALL_ANGLE_PATTERN_1...6 with the values that have
 - If you run the firmware again, you should normally get a lower value for the average current.
 
 
+------------- segger rtt --------------
+Here a link that explains the way Jlink can be used instead of uart to get debug message and/or send commands
+https://kb.segger.com/RTT#SEGGER_RTT_printf()
+It requires adding:
+    - SEGGER_RTT_Init ();     
+    - SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
+Then it is possible to uses code like
+    SEGGER_RTT_WriteString(0, RTT_CTRL_CLEAR); // clear the RTT terminal
+    or
+    SEGGER_RTT_printf(0, "Retry CCU8 start; still %u try\r\n", retry_counter);
 
+    For printf, the syntax is            
+    %[flags][FieldWidth][.Precision]ConversionSpecifier
+    where flags can be
+        -	= Left justify within the field width
+        +	= Always print sign extension for signed conversions
+        0	= Pad with 0 instead of spaces. Ignored when using '-'-flag or precision
+    where conversion speecifier is
+        c one char
+        d signed integer
+        u unsigned integer
+        x hexadecimal integer
+        s string
+        p   8-digit hexadecimal integer. (Argument shall be a pointer to void.)
 
+------------- CCU4 ----------------
+- slice 0 is used to add a delay for sampling the hall sensors when a change occurs
+- slice 1 was foreseen to measure the time between 2 patterns (if valid)
+- slice 2 is used as running counter to measure the delay between last pattern change and current irq0 from ccu8  (when timer is running up)

@@ -81,10 +81,10 @@
 #endif
 
 // cadence
-#define CADENCE_SENSOR_CALC_COUNTER_MIN                         (uint16_t)((uint32_t)PWM_CYCLES_SECOND*100U/446U)  // 3500 at 15.625KHz
-#define CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED               (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/558U)   // 280 at 15.625KHz
-#define CADENCE_TICKS_STARTUP                                   (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/25U)  // ui16_cadence_sensor_ticks value for startup. About 7-8 RPM (6250 at 15.625KHz)
-#define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD  (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/446U)   // software based Schmitt trigger to stop motor jitter when at resolution limits (350 at 15.625KHz)
+#define CADENCE_SENSOR_CALC_COUNTER_MIN                         (uint16_t)((uint32_t)PWM_CYCLES_SECOND*100U/446U)  // 3500 at 15.625KHz ; 4270 at 19kHz
+#define CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED               (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/558U)   // 280 at 15.625KHz ; 341 at 19 khz
+#define CADENCE_TICKS_STARTUP                                   (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/25U)  // 7619 ui16_cadence_sensor_ticks value for startup. About 7-8 RPM (6250 at 15.625KHz)
+#define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD  (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/446U)   // 446 ; software based Schmitt trigger to stop motor jitter when at resolution limits (350 at 15.625KHz)
 
 // Wheel speed sensor
 #define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX				(uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/1157U)   // 164 at 19 khz (135 at 15,625KHz) something like 200 m/h with a 6'' wheel
@@ -93,15 +93,19 @@
 
 #define TEST_WITH_FIXED_PARAMETERS (1)  // for testing without speed sensor, torque sensor nor Throttle, we use here fixed parameters
         // Most fixed parameters are set up in ebike_app.c but to avoid lot of program changes, we also set here a reduced value to PWM_DUTY_CYCLE_MAX)
-#define CALIBRATE_HALL_SENSORS (0) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
+#define CALIBRATE_HALL_SENSORS (1) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
 
 // duty cycle
 #if ((TEST_WITH_FIXED_PARAMETERS == 1) || (CALIBRATE_HALL_SENSORS == 1)) 
-#define PWM_DUTY_CYCLE_MAX									40  // for testing with fix duty cycle or for calibration of hall sensors
+#define PWM_DUTY_CYCLE_MAX	80  // for testing with fix duty cycle or for calibration of hall sensors
 #else
-#define PWM_DUTY_CYCLE_MAX									255   // it is normally 255 but this seems to high because we exceed the max timer value 
+#define PWM_DUTY_CYCLE_MAX	255   // it is normally 255 but this seems to high because we exceed the max timer value 
 #endif
-#define PWM_DUTY_CYCLE_STARTUP								30    // Initial PWM Duty Cycle at motor startup
+#define PWM_DUTY_CYCLE_STARTUP	30    // Initial PWM Duty Cycle at motor startup
+
+#define FIRST_OFFSET_ANGLE_FOR_CALIBRATION 25 //17 // This is the first value used for calibration; it increases every 4 sec
+#define CALIBRATE_OFFSET_STEP 0     // 1// step used when increasing the calibrated_offset_angle (normally 1; could be set to 0 for some kind of test)
+#define CALIBRATED_OFFSET_ANGLE 28   // this is the value provided by the hall sensor offset calibration process
 
 
 
@@ -358,10 +362,10 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define TMP36										1
 
 // throttle mode
-#define DISABLED									0
-#define PEDALING									1
+#define DISABLED								0
+#define PEDALING								1
 #define W_O_P_6KM_H_ONLY							2
-#define W_O_P_6KM_H_AND_PEDALING					3
+#define W_O_P_6KM_H_AND_PEDALING        					3
 #define UNCONDITIONAL								4
 
 // wheel perimeter
