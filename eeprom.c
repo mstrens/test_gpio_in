@@ -14,7 +14,7 @@ extern struct_configuration_variables m_configuration_variables ;
 static const uint8_t ui8_default_array[EEPROM_BYTES_STORED] = 
 {
   DEFAULT_VALUE_KEY,							// 0 + EEPROM_BASE_ADDRESS (Array index)
-  BATTERY_CURRENT_MAX,							// 1 + EEPROM_BASE_ADDRESS
+  BATTERY_CURRENT_MAX,							// 1 + EEPROM_BASE_ADDRESS    It was 13A for TSDZ2, reduced to 5 for test of TSDZ8
   BATTERY_LOW_VOLTAGE_CUT_OFF_X10_0,			// 2 + EEPROM_BASE_ADDRESS
   BATTERY_LOW_VOLTAGE_CUT_OFF_X10_1,			// 3 + EEPROM_BASE_ADDRESS
   WHEEL_PERIMETER_0,							// 4 + EEPROM_BASE_ADDRESS
@@ -25,16 +25,28 @@ static const uint8_t ui8_default_array[EEPROM_BYTES_STORED] =
   // for oem display
   MOTOR_ASSISTANCE_WITHOUT_PEDAL_ROTATION,		// 9 + EEPROM_BASE_ADDRESS 0 or 1 ; 1 allows to get assist just pressing on the pedal
   ASSISTANCE_WITH_ERROR_ENABLED,				// 10 + EEPROM_BASE_ADDRESS
-  BATTERY_SOC,									// 11 + EEPROM_BASE_ADDRESS
+  BATTERY_SOC,									// 11 + EEPROM_BASE_ADDRESS    State of charge
   ENABLE_SET_PARAMETER_ON_STARTUP,				// 12 + EEPROM_BASE_ADDRESS
   ENABLE_STREET_MODE_ON_STARTUP,				// 13 + EEPROM_BASE_ADDRESS
-  RIDING_MODE_ON_STARTUP,						// 14 + EEPROM_BASE_ADDRESS
+  RIDING_MODE_ON_STARTUP,						// 14 + EEPROM_BASE_ADDRESS   ; see list of code here below    
   LIGHTS_CONFIGURATION_ON_STARTUP,				// 15 + EEPROM_BASE_ADDRESS
   STARTUP_BOOST_ON_STARTUP,						// 16 + EEPROM_BASE_ADDRESS
   ENABLE_AUTO_DATA_DISPLAY,						// 17 + EEPROM_BASE_ADDRESS
   SOC_PERCENT_CALC,								// 18 + EEPROM_BASE_ADDRESS
   TORQUE_SENSOR_ADV_ON_STARTUP					// 19 + EEPROM_BASE_ADDRESS
 };
+
+// riding modes
+//#define OFF_MODE                                  0 // not used
+//#define POWER_ASSIST_MODE                         1
+//#define TORQUE_ASSIST_MODE                        2
+//#define CADENCE_ASSIST_MODE                       3
+//#define eMTB_ASSIST_MODE                          4
+//#define HYBRID_ASSIST_MODE						  5
+//#define CRUISE_MODE                               6
+//#define WALK_ASSIST_MODE                          7
+//#define TORQUE_SENSOR_CALIBRATION_MODE            8								   
+
 
 void m_configuration_init(void){
  // added by mstrens in order to fill m-configuration_variables with default before having eeprom functions

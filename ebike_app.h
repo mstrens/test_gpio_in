@@ -17,7 +17,6 @@
 #define SPEED						1
 
 // for oem display
-extern volatile uint8_t ui8_display_fault_code;
 extern volatile uint8_t ui8_system_state;
 
 // cadence sensor
@@ -59,5 +58,13 @@ void ebike_app_controller(void);
 struct_configuration_variables* get_configuration_variables(void);
 
 void ebike_app_init(void);
+
+uint16_t read_battery_soc(void);
+
+//static void calc_oem_wheel_speed(void);
+//static void ebike_control_lights(void);
+
+
+
 
 #endif /* _EBIKE_APP_H_ */

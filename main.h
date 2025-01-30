@@ -37,16 +37,14 @@
 // ----------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------
 
-#define PWM_FREQ										19 // 19 Khz
-
-// PWM related values
-#define PWM_COUNTER_MAX										1680 // at 64 Mz // at 16Mhz from TSDZ2, it was 420 // 16MHz / 840 = 19,047 KHz                                        107
-#define MIDDLE_SVM_TABLE									840   // in TSDZ2, it was 107 // svm table 19 Khz; table had a max of 215.
-//#define MIDDLE_PWM_COUNTER									107  // not used anymore when we use 1680 for PWM instead of 420
+// PWM related values (for 19 kHz)
+#define PWM_COUNTER_MAX					1680 // at 64 Mz // at 16Mhz from TSDZ2, it was 420 // 16MHz / 840 = 19,047 KHz                                        107
+#define MIDDLE_SVM_TABLE			(PWM_COUNTER_MAX/2)   // in TSDZ2, it was 107 because svm table was uint8_t and had a max of 215.
+                                                                        //TSDZ8 uses a table in uint16_t so it can be 2* higher
 // wheel speed parameters
-#define OEM_WHEEL_SPEED_DIVISOR								384 // at 19 KHz
+#define OEM_WHEEL_SPEED_DIVISOR			384 // at 19 KHz
 
-#define PWM_CYCLES_SECOND									(64000000/(PWM_COUNTER_MAX*2)) // 55.5us (PWM period) 18 Khz // for TSDZ2, it was 16000000
+#define PWM_CYCLES_SECOND			(64000000/(PWM_COUNTER_MAX*2)) // 55.5us (PWM period) 18 Khz // for TSDZ2, it was 16000000
 
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
@@ -68,16 +66,25 @@
 #define THROTTLE_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT	(uint8_t)(PWM_CYCLES_SECOND/78)  // 244
 #define THROTTLE_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN		(uint8_t)(PWM_CYCLES_SECOND/390) //48
 
-#define MOTOR_OVER_SPEED_ERPS								((PWM_CYCLES_SECOND/29) < 650 ?  (PWM_CYCLES_SECOND/29) : 650) // motor max speed | 29 points for the sinewave at max speed (less than PWM_CYCLES_SECOND/29)
-#define MOTOR_SPEED_FIELD_WEAKENING_MIN						490
+// motor max speed | for TSDZ2 29 points for the sinewave at max speed (less than PWM_CYCLES_SECOND/29)
+//#define MOTOR_OVER_SPEED_ERPS	((PWM_CYCLES_SECOND/29) < 650 ?  (PWM_CYCLES_SECOND/29) : 650) 
+// 19000 cycles/sec /29 = 656 cycle/sec ; 1 cycle is 55 usec ; so 1 electric rotation = 29*55 = 1595 usec
+//  so for TSDZ2 one rotation takes 1595 *8 = 12760 usec ; so 78 rps = 4700 rpm
+//  for the same rpm, tsdz8 can has 2 more ticks                                            
+#define MOTOR_OVER_SPEED_ERPS	1300 
+
+// for TSDZ2
+//#define MOTOR_SPEED_FIELD_WEAKENING_MIN			490
+//For TSDZ8, I expect that there must 2 * more ticks to reach the same mecanical speed
+#define MOTOR_SPEED_FIELD_WEAKENING_MIN				980
 
 // foc angle multiplier
 #if MOTOR_TYPE
 // 36 volt motor
-#define FOC_ANGLE_MULTIPLIER								30
+#define FOC_ANGLE_MULTIPLIER					30   // 30 for TSDZ2 , still to check for TSDZ8
 #else
 // 48 volt motor
-#define FOC_ANGLE_MULTIPLIER								39
+#define FOC_ANGLE_MULTIPLIER					39   // 39 for TSDZ2, still to check for TSDZ8
 #endif
 
 // cadence
@@ -87,13 +94,14 @@
 #define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD  (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/446U)   // 446 ; software based Schmitt trigger to stop motor jitter when at resolution limits (350 at 15.625KHz)
 
 // Wheel speed sensor
-#define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX				(uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/1157U)   // 164 at 19 khz (135 at 15,625KHz) something like 200 m/h with a 6'' wheel
-#define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN				(uint16_t)((uint32_t)PWM_CYCLES_SECOND*1000U/477U) // 32767@15625KHz could be a bigger number but will make for a slow detection of stopped wheel speed
+#define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX			(uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/1157U)   // 164 at 19 khz (135 at 15,625KHz) something like 200 m/h with a 6'' wheel
+#define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN			(uint16_t)((uint32_t)PWM_CYCLES_SECOND*1000U/477U) // 32767@15625KHz could be a bigger number but will make for a slow detection of stopped wheel speed
 
 
 #define TEST_WITH_FIXED_PARAMETERS (1)  // for testing without speed sensor, torque sensor nor Throttle, we use here fixed parameters
         // Most fixed parameters are set up in ebike_app.c but to avoid lot of program changes, we also set here a reduced value to PWM_DUTY_CYCLE_MAX)
 #define CALIBRATE_HALL_SENSORS (1) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
+#define DEBUG_ON_UART                     (1)  // when 0, no printf messages are sent on uart
 
 // duty cycle
 #if ((TEST_WITH_FIXED_PARAMETERS == 1) || (CALIBRATE_HALL_SENSORS == 1)) 
@@ -103,11 +111,10 @@
 #endif
 #define PWM_DUTY_CYCLE_STARTUP	30    // Initial PWM Duty Cycle at motor startup
 
+// set step on 0 and first offset on a value if you want to use the flag calibration with a fixed offset
 #define FIRST_OFFSET_ANGLE_FOR_CALIBRATION 25 //17 // This is the first value used for calibration; it increases every 4 sec
 #define CALIBRATE_OFFSET_STEP 0     // 1// step used when increasing the calibrated_offset_angle (normally 1; could be set to 0 for some kind of test)
 #define CALIBRATED_OFFSET_ANGLE 28   // this is the value provided by the hall sensor offset calibration process
-
-
 
 
 // ----------------------------------------------------------------------------------------------------------------
@@ -141,13 +148,13 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define HALL_COUNTER_OFFSET_UP                  (HALL_COUNTER_OFFSET_DOWN + 21)
 #define FW_HALL_COUNTER_OFFSET_MAX              5 // 5*4=20us max time offset
 
-#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      5 // it was 10 for tsdz2 that used 8 poles; tsdz8 uses 4 poles
+#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      20 // it was 10 for tsdz2 that used 8 poles; tsdz8 uses 4 poles so it takes 2* more ticks
  
 // adc torque offset gap value for error
 #define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		30
 
 // Torque sensor range values
-#define ADC_TORQUE_SENSOR_RANGE					(uint16_t)(PEDAL_TORQUE_ADC_MAX - PEDAL_TORQUE_ADC_OFFSET)
+#define ADC_TORQUE_SENSOR_RANGE				(uint16_t)(PEDAL_TORQUE_ADC_MAX - PEDAL_TORQUE_ADC_OFFSET)
 #define ADC_TORQUE_SENSOR_RANGE_TARGET	  		160
 
 // Torque sensor offset values
@@ -162,8 +169,8 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #endif
 
 // adc torque range parameters for remapping
-#define ADC_TORQUE_SENSOR_DELTA_ADJ				(uint16_t)((ADC_TORQUE_SENSOR_MIDDLE_OFFSET_ADJ * 2) - ADC_TORQUE_SENSOR_CALIBRATION_OFFSET - ADC_TORQUE_SENSOR_OFFSET_ADJ)
-#define ADC_TORQUE_SENSOR_RANGE_INGREASE_X100	(uint16_t)((ADC_TORQUE_SENSOR_RANGE_TARGET * 50) / ADC_TORQUE_SENSOR_RANGE)
+#define ADC_TORQUE_SENSOR_DELTA_ADJ			(uint16_t)((ADC_TORQUE_SENSOR_MIDDLE_OFFSET_ADJ * 2) - ADC_TORQUE_SENSOR_CALIBRATION_OFFSET - ADC_TORQUE_SENSOR_OFFSET_ADJ)
+#define ADC_TORQUE_SENSOR_RANGE_INGREASE_X100   	(uint16_t)((ADC_TORQUE_SENSOR_RANGE_TARGET * 50) / ADC_TORQUE_SENSOR_RANGE)
 #define ADC_TORQUE_SENSOR_ANGLE_COEFF			11
 #define ADC_TORQUE_SENSOR_ANGLE_COEFF_X10		(uint16_t)(ADC_TORQUE_SENSOR_ANGLE_COEFF * 10)
 
@@ -178,7 +185,7 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define PERCENT_TORQUE_SENSOR_RANGE_WITH_WEIGHT		75 // % of torque sensor range with weight
 #define ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT		(uint16_t)((ADC_TORQUE_SENSOR_RANGE_TARGET * PERCENT_TORQUE_SENSOR_RANGE_WITH_WEIGHT) / 100)
 
-#define ADC_TORQUE_SENSOR_DELTA_WITH_WEIGHT			(uint16_t)(((((ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT \
+#define ADC_TORQUE_SENSOR_DELTA_WITH_WEIGHT		(uint16_t)(((((ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT \
 * ADC_TORQUE_SENSOR_RANGE_TARGET_MIN) / ADC_TORQUE_SENSOR_RANGE_TARGET)	* (100 + PEDAL_TORQUE_ADC_RANGE_ADJ) / 100) \
 * (ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT - ADC_TORQUE_SENSOR_CALIBRATION_OFFSET + ADC_TORQUE_SENSOR_OFFSET_ADJ \
 - ((ADC_TORQUE_SENSOR_DELTA_ADJ * ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT) / ADC_TORQUE_SENSOR_RANGE_TARGET))) / ADC_TORQUE_SENSOR_TARGET_WITH_WEIGHT)
@@ -190,22 +197,22 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 * PEDAL_TORQUE_PER_10_BIT_ADC_STEP_ADV_X100) / PEDAL_TORQUE_PER_10_BIT_ADC_STEP_BASE_X100))
 
 // scale the torque assist target current
-#define TORQUE_ASSIST_FACTOR_DENOMINATOR			120
+#define TORQUE_ASSIST_FACTOR_DENOMINATOR		120
 
 // torque step mode
-#define TORQUE_STEP_DEFAULT							0 // not calibrated
-#define TORQUE_STEP_ADVANCED						1 // calibrated
+#define TORQUE_STEP_DEFAULT				0 // not calibrated
+#define TORQUE_STEP_ADVANCED				1 // calibrated
 
 // smooth start ramp
-#define SMOOTH_START_RAMP_MIN						30
+#define SMOOTH_START_RAMP_MIN				30
 
 // adc current
-//#define ADC_10_BIT_BATTERY_EXTRACURRENT				38  //  6 amps
-#define ADC_10_BIT_BATTERY_EXTRACURRENT				15 //changed for testing, it was :  50  //  8 amps
-#define ADC_10_BIT_BATTERY_CURRENT_MAX				40 //changed for testing, it was : 112	// 18 amps // 1 = 0.16 Amp
-//#define ADC_10_BIT_BATTERY_CURRENT_MAX				124	// 20 amps // 1 = 0.16 Amp
-//#define ADC_10_BIT_BATTERY_CURRENT_MAX				136	// 22 amps // 1 = 0.16 Amp
-#define ADC_10_BIT_MOTOR_PHASE_CURRENT_MAX			60 // changed for testing, it was :187	// 30 amps // 1 = 0.16 Amp
+//#define ADC_10_BIT_BATTERY_EXTRACURRENT		38  //  6 amps
+#define ADC_10_BIT_BATTERY_EXTRACURRENT			15 //changed for testing, it was :  50  //  8 amps
+#define ADC_10_BIT_BATTERY_CURRENT_MAX			40 //changed for testing, it was : 112	// 18 amps // 1 = 0.16 Amp
+//#define ADC_10_BIT_BATTERY_CURRENT_MAX		124	// 20 amps // 1 = 0.16 Amp
+//#define ADC_10_BIT_BATTERY_CURRENT_MAX		136	// 22 amps // 1 = 0.16 Amp
+#define ADC_10_BIT_MOTOR_PHASE_CURRENT_MAX		60 // changed for testing, it was :187	// 30 amps // 1 = 0.16 Amp
 /*---------------------------------------------------------
  NOTE: regarding ADC battery current max
 
@@ -216,8 +223,8 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
  ---------------------------------------------------------*/
 
 // throttle ADC values
-//#define ADC_THROTTLE_MIN_VALUE					47
-//#define ADC_THROTTLE_MAX_VALUE					176
+//#define ADC_THROTTLE_MIN_VALUE			47
+//#define ADC_THROTTLE_MAX_VALUE			176
 
 /*---------------------------------------------------------
  NOTE: regarding throttle ADC values
@@ -228,7 +235,7 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
  ---------------------------------------------------------*/
 
 // cadence sensor
-#define CADENCE_SENSOR_NUMBER_MAGNETS				20U
+#define CADENCE_SENSOR_NUMBER_MAGNETS			20U  // is not used in the code (hardcoded 60 min / 20 = 3)
 
 /*---------------------------------------------------------------------------
  NOTE: regarding the cadence sensor
@@ -257,7 +264,7 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 
 
 // ADC battery voltage to be subtracted from the cut-off
-#define DIFFERENCE_CUT_OFF_SHUTDOWN_10_BIT				100
+#define DIFFERENCE_CUT_OFF_SHUTDOWN_10_BIT			100
 
 /*---------------------------------------------------------
  NOTE: regarding ADC battery voltage measurement
@@ -277,73 +284,73 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 // for oem display
 
 // UART
-#define UART_RX_BUFFER_LEN   						7
+#define UART_RX_BUFFER_LEN   				7
 #define RX_CHECK_CODE					(UART_RX_BUFFER_LEN - 1)															
-#define UART_TX_BUFFER_LEN							9
+#define UART_TX_BUFFER_LEN				9
 #define TX_CHECK_CODE					(UART_TX_BUFFER_LEN - 1)
-#define TX_STX										0x43
-#define RX_STX										0x59
+#define TX_STX						0x43
+#define RX_STX						0x59
 
 // parameters for display data
 #if UNITS_TYPE          // 1 mph and miles
-#define OEM_WHEEL_FACTOR							900
+#define OEM_WHEEL_FACTOR				900
 #else                   // 0 = km/h and kilometer
-#define OEM_WHEEL_FACTOR							1435
+#define OEM_WHEEL_FACTOR				1435
 #endif
-#define MILES										1
+#define MILES						1
 
-#define DATA_INDEX_ARRAY_DIM						6
+#define DATA_INDEX_ARRAY_DIM				6
 
 // delay lights function (0.1 sec)
-#define DELAY_LIGHTS_ON					 	DELAY_MENU_ON
+#define DELAY_LIGHTS_ON				 	DELAY_MENU_ON
 
 // delay function status (0.1 sec)
-#define DELAY_FUNCTION_STATUS			(uint8_t) (DELAY_MENU_ON / 2)
+#define DELAY_FUNCTION_STATUS			        (uint8_t) (DELAY_MENU_ON / 2)
 
 // delay torque sensor calibration (0.1 sec)
-#define DELAY_DISPLAY_TORQUE_CALIBRATION			250
+#define DELAY_DISPLAY_TORQUE_CALIBRATION		250
 
 // display function status
-#define FUNCTION_STATUS_OFF							1
+#define FUNCTION_STATUS_OFF				1
 #define FUNCTION_STATUS_ON				(uint8_t) (100 + DISPLAY_STATUS_OFFSET)
-#define DISPLAY_STATUS_OFFSET						5
+#define DISPLAY_STATUS_OFFSET				5
 
 // assist level 
-#define OFF											0
-#define ECO											1
-#define TOUR										2
-#define SPORT										3
-#define TURBO										4
+#define OFF						0
+#define ECO						1
+#define TOUR						2
+#define SPORT						3
+#define TURBO						4
 
 // assist pedal level mask
-#define ASSIST_PEDAL_LEVEL0							0x10
-#define ASSIST_PEDAL_LEVEL01						0x80
-#define ASSIST_PEDAL_LEVEL1							0x40
-#define ASSIST_PEDAL_LEVEL2							0x02
-#define ASSIST_PEDAL_LEVEL3							0x04
-#define ASSIST_PEDAL_LEVEL4							0x08
+#define ASSIST_PEDAL_LEVEL0				0x10
+#define ASSIST_PEDAL_LEVEL01				0x80
+#define ASSIST_PEDAL_LEVEL1				0x40
+#define ASSIST_PEDAL_LEVEL2				0x02
+#define ASSIST_PEDAL_LEVEL3				0x04
+#define ASSIST_PEDAL_LEVEL4				0x08
 
-#define ASSIST_PEDAL_LEVEL01_PERCENT				60
+#define ASSIST_PEDAL_LEVEL01_PERCENT			60
 
 // assist mode
-#define OFFROAD_MODE								0
-#define STREET_MODE									1
+#define OFFROAD_MODE					0
+#define STREET_MODE					1
 
 // oem display fault & function code
-#define CLEAR_DISPLAY								0
-#define NO_FUNCTION									0
-#define NO_FAULT									0
+#define CLEAR_DISPLAY					0
+#define NO_FUNCTION					0
+#define NO_FAULT					0
 #define NO_ERROR                                  	0 
 
-#define ERROR_OVERVOLTAGE							1 // E01 (E06 blinking for XH18)
+#define ERROR_OVERVOLTAGE				1 // E01 (E06 blinking for XH18)
 #define ERROR_TORQUE_SENSOR                       	2 // E02
-#define ERROR_CADENCE_SENSOR			          	3 // E03
+#define ERROR_CADENCE_SENSOR			        3 // E03
 #define ERROR_MOTOR_BLOCKED                       	4 // E04
-#define ERROR_THROTTLE								5 // E05 (E03 blinking for XH18)
-#define ERROR_OVERTEMPERATURE						6 // E06
+#define ERROR_THROTTLE					5 // E05 (E03 blinking for XH18)
+#define ERROR_OVERTEMPERATURE				6 // E06
 #define ERROR_BATTERY_OVERCURRENT                 	7 // E07 (E04 blinking for XH18)
-#define ERROR_SPEED_SENSOR							8 // E08
-#define ERROR_WRITE_EEPROM  					  	9 // E09 shared (E08 blinking for XH18)
+#define ERROR_SPEED_SENSOR				8 // E08
+#define ERROR_WRITE_EEPROM  				9 // E09 shared (E08 blinking for XH18)
 #define ERROR_MOTOR_CHECK                       	9 // E09 shared (E08 blinking for XH18)
 
 // optional ADC function
@@ -358,33 +365,33 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #endif
 
 // temperature sensor type
-#define LM35										0
-#define TMP36										1
+#define LM35						0
+#define TMP36						1
 
 // throttle mode
-#define DISABLED								0
-#define PEDALING								1
-#define W_O_P_6KM_H_ONLY							2
-#define W_O_P_6KM_H_AND_PEDALING        					3
-#define UNCONDITIONAL								4
+#define DISABLED					0
+#define PEDALING					1
+#define W_O_P_6KM_H_ONLY				2
+#define W_O_P_6KM_H_AND_PEDALING        		3
+#define UNCONDITIONAL					4
 
 // wheel perimeter
-#define WHEEL_PERIMETER_0							(uint8_t) (WHEEL_PERIMETER & 0x00FF)
-#define WHEEL_PERIMETER_1							(uint8_t) ((WHEEL_PERIMETER >> 8) & 0x00FF)
+#define WHEEL_PERIMETER_0				(uint8_t) (WHEEL_PERIMETER & 0x00FF)
+#define WHEEL_PERIMETER_1				(uint8_t) ((WHEEL_PERIMETER >> 8) & 0x00FF)
 
 // BATTERY PARAMETER
 // battery low voltage cut off
 #define BATTERY_LOW_VOLTAGE_CUT_OFF_X10_0		(uint8_t) ((uint16_t)(BATTERY_LOW_VOLTAGE_CUT_OFF * 10) & 0x00FF)
 #define BATTERY_LOW_VOLTAGE_CUT_OFF_X10_1		(uint8_t) (((uint16_t)(BATTERY_LOW_VOLTAGE_CUT_OFF * 10) >> 8) & 0x00FF)
 // battery voltage to be subtracted from the cut-off 8bit
-#define DIFFERENCE_CUT_OFF_SHUTDOWN_8_BIT			26
+#define DIFFERENCE_CUT_OFF_SHUTDOWN_8_BIT		26
 // battery voltage for saving battery capacity at shutdown
 #define BATTERY_VOLTAGE_SHUTDOWN_8_BIT			(uint8_t) ((uint16_t)(BATTERY_LOW_VOLTAGE_CUT_OFF * 250 / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000)) - ((uint16_t) DIFFERENCE_CUT_OFF_SHUTDOWN_8_BIT)
 #define BATTERY_VOLTAGE_SHUTDOWN_10_BIT			(uint16_t) (BATTERY_VOLTAGE_SHUTDOWN_8_BIT << 2)
 // battery voltage reset SOC percentage
 #define BATTERY_VOLTAGE_RESET_SOC_PERCENT_X10   (uint16_t)((float)LI_ION_CELL_RESET_SOC_PERCENT * (float)(BATTERY_CELLS_NUMBER * 10))
 // battery SOC eeprom value saved (8 bit)
-#define BATTERY_SOC								0
+#define BATTERY_SOC					0
 // battery SOC % threshold x10 (volts calc)
 #define BATTERY_SOC_PERCENT_THRESHOLD_X10		150
 
@@ -440,19 +447,19 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define POWER_ASSIST_LEVEL_TURBO     (uint8_t)(POWER_ASSIST_LEVEL_4 / 2)
 
 // walk assist
-#define WALK_ASSIST_THRESHOLD_SPEED		(uint8_t)(WALK_ASSIST_THRESHOLD_SPEED_X10 / 10)
-#define WALK_ASSIST_WHEEL_SPEED_MIN_DETECT_X10	42
-#define WALK_ASSIST_ERPS_THRESHOLD				20
-#define WALK_ASSIST_ADJ_DELAY_MIN				4
+#define WALK_ASSIST_THRESHOLD_SPEED		        (uint8_t)(WALK_ASSIST_THRESHOLD_SPEED_X10 / 10)
+#define WALK_ASSIST_WHEEL_SPEED_MIN_DETECT_X10	        42
+#define WALK_ASSIST_ERPS_THRESHOLD			20
+#define WALK_ASSIST_ADJ_DELAY_MIN			4
 #define WALK_ASSIST_ADJ_DELAY_STARTUP			10
-#define WALK_ASSIST_DUTY_CYCLE_MIN              40
+#define WALK_ASSIST_DUTY_CYCLE_MIN                      40
 #define WALK_ASSIST_DUTY_CYCLE_STARTUP			50
-#define WALK_ASSIST_DUTY_CYCLE_MAX              130
-#define WALK_ASSIST_ADC_BATTERY_CURRENT_MAX     40
+#define WALK_ASSIST_DUTY_CYCLE_MAX                      130
+#define WALK_ASSIST_ADC_BATTERY_CURRENT_MAX             40
 
 
 // cruise threshold (speed limit min km/h x10)
-#define CRUISE_THRESHOLD_SPEED_X10				(CRUISE_THRESHOLD_SPEED * 10)
+#define CRUISE_THRESHOLD_SPEED_X10			(CRUISE_THRESHOLD_SPEED * 10)
 #define CRUISE_THRESHOLD_SPEED_X10_DEFAULT		80
 #define CRUISE_OFFROAD_THRESHOLD_SPEED_X10		(uint8_t)CRUISE_THRESHOLD_SPEED_X10
 #if CRUISE_THRESHOLD_SPEED_X10 < CRUISE_THRESHOLD_SPEED_X10_DEFAULT
@@ -462,12 +469,14 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #endif	
 
 // odometer compensation for displayed data (eeprom)
-#define ODOMETER_COMPENSATION					0
+#define ODOMETER_COMPENSATION				0
 // zero odometer compensation
-#define ZERO_ODOMETER_COMPENSATION				100000000
+#define ZERO_ODOMETER_COMPENSATION			100000000
 
 #define ASSISTANCE_WITH_ERROR_ENABLED			0
 
-#define AVAIABLE_FOR_FUTURE_USE					0 // EEPROM
+#define AVAIABLE_FOR_FUTURE_USE				0 // EEPROM
+
+//#define VADC0_BGGTSEL_VALUE 1 // do not use gate for VADC triggering
 
 #endif // _MAIN_H_

@@ -138,11 +138,8 @@ volatile uint16_t ui16_wheel_speed_sensor_ticks_counter_min = 0;
 volatile uint8_t ui8_battery_SOC_saved_flag = 0;
 volatile uint8_t ui8_battery_SOC_reset_flag = 0;
 
-// Last rotor complete revolution Hall ticks
-static uint16_t ui16_hall_360_ticks;
-
 // Last Hall sensor state
-static uint8_t  previous_hall_pattern = 7; // Invalid value, force execution of Hall code at the first run
+uint8_t  previous_hall_pattern = 7; // Invalid value, force execution of Hall code at the first run
 
 // Hall counter value of last Hall transition 
 uint16_t previous_360_ref_ticks ; 
@@ -455,7 +452,7 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
     // get and save values from the interrupt (when hall pattern changed)
     
     uint32_t critical_section_value = XMC_EnterCriticalSection();
-    uint8_t current_hall_pattern =  (uint8_t) hall_pattern_irq & 0x07 ;  // hall pattern when last hall change occured
+    current_hall_pattern =  (uint8_t) hall_pattern_irq & 0x07 ;  // hall pattern when last hall change occured
     uint16_t last_hall_pattern_change_ticks = hall_pattern_change_ticks_irq ;  // ticks at this pattern change
     uint16_t current_ticks = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW) ; // ticks now
     XMC_ExitCriticalSection(critical_section_value);
@@ -493,37 +490,17 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[current_hall_pattern]; 
         // set hall counter offset for rotor interpolation based on current hall state
         ui8_hall_counter_offset = ui8_hall_counter_offsets[current_hall_pattern]; // to take care of the delay the hall sensor takes to switch (can be different for up and down)
-        #if (DEBUG_HALL_SENSOR == 1)
-        if ( first_debug_index < 100) { // for debug we save the first 100 changes
-            first_debug_values[first_debug_index][0] = current_ticks ;
-            first_debug_values[first_debug_index][1] = (uint32_t) current_ticks - (uint32_t) last_hall_pattern_change_ticks_prev ;
-            first_debug_values[first_debug_index][2] = current_hall_pattern ;
-            first_debug_values[first_debug_index][3] = ui8_motor_phase_absolute_angle ;
-            first_debug_values[first_debug_index][4] = enlapsed_time ;
-            first_debug_values[first_debug_index][5] = ui8_controller_duty_cycle_target;
-            first_debug_values[first_debug_index][6] =  ui8_g_duty_cycle;
-            first_debug_values[first_debug_index][7] = ui8_controller_adc_battery_current_target ; 
-            first_debug_values[first_debug_index][8] = ui8_adc_battery_current_filtered; 
-            first_debug_values[first_debug_index][9] = hall_pattern_error_counter;
-            first_debug_values[first_debug_index][10] = hall_pattern_valid_counter;
-            first_debug_values[first_debug_index][11] = ui8_motor_commutation_type;
-            first_debug_values[first_debug_index][12] = ui16_hall_counter_total;
-            first_debug_values[first_debug_index][13] = calibrated_offset_angle;
-            first_debug_values[first_debug_index][14] = ui8_hall_360_ref_valid;
-            first_debug_index++;
-        }
-        #endif
+        
         #if (CALIBRATE_HALL_SENSORS == (1))
         last_hall_pattern_change_ticks_prev = last_hall_pattern_change_ticks;
         #endif 
     } else { // no hall patern change
         // Verify if rotor stopped (< 10 ERPS)
-        if (enlapsed_time > (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)) { // 250000/10 /6 = 4166
+        if (enlapsed_time > (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)) { //  for TSDZ2: 250000/10 /6 = 4166 ; for TSDZ8 = 8332
             ui8_motor_commutation_type = BLOCK_COMMUTATION; // 0
             ui8_g_foc_angle = 0;
             ui8_hall_360_ref_valid = 0;
             ui16_hall_counter_total = 0xffff;
-            //printf("enlapsed time= %ld\r\n",enlapsed_time);
         }
 
     }
@@ -629,6 +606,8 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
     debug_values[11] = ui8_controller_duty_cycle_target;
     debug_values[12] = ui8_controller_adc_battery_current_target ;
     debug_values[13] = calibrated_offset_angle;
+    debug_values[14] = ui8_adc_battery_current_acc;
+    
     #endif // end of CALIBRATE_HALL_SENSORS
     //XMC_GPIO_SetOutputLow(OUT_LIGHT_PORT,OUT_LIGHT_PIN); // to check the time required by this interrupt
     
@@ -698,10 +677,17 @@ __RAM_FUNC void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
         // next line has been moved to ebike_app.c to save time in this irq
         //ui16_adc_throttle = (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0xFFFF) >> 2; // throttle gr1 ch7 result 5  in bg  p2.5
         
-        // current is in 8 bits instead of 12 bits
-        uint8_t ui8_temp_current = (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0xFFFF) >> 4 ; // current  gr0 ch1 result 8 in queue 0 p2.8 ; from 12 bits to 8 bits
-        // to test with other measurement which one is best
-        //ui8_temp_current = (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0FFFF ) >> 4 ; // current  gr0 ch1 result 8 in queue 0 p2.8
+        //the resistance/gain in TSDZ8 is 4X smaller than in TSDZ2; still ADC is 12 bits instead of 10; so ADC 12bits TSDZ8 = ADC 10 bits TSDZ2
+        // in TSDZ2, we used only the 8 lowest bits of adc; 1 adc step = 0,16A
+        // In tsdz8, the resistance is (I expect) 0.003 Ohm ; So 1A => 0,003V => 0,03V (gain aop is 10)*4096/5Vcc = 24,576 steps
+        //      SO 1 adc step = 1/24,576 = 0,040A
+        // For 10 A, TSDZ2 should gives 10/0,16 = 62 steps
+        // For 10 A, TSDZ8 shoud give 10*24,576 steps
+        // to convert TSDZ8 steps in the same units as TSDZ2, we shoud take ADC *62/245,76 = 0,25 and divide by 4 (or >>2)
+        // current is available in gr0 ch1 result 8 in queue 0 p2.8 and/or in gr0 ch0 result in 12 (p2.8)
+        // here we take the average of the 2 conversions and so use >>3 instead of >>2
+        uint8_t ui8_temp_current = ((XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0x00FF) +
+                                    (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ) & 0x00FF)) >> 3  ; 
         ui8_adc_battery_current_acc = (uint8_t)(ui8_temp_current >> 1) + (ui8_adc_battery_current_acc>>1);
         ui8_adc_battery_current_filtered = (uint8_t)(ui8_adc_battery_current_acc >> 1) + (ui8_adc_battery_current_filtered >> 1);
 

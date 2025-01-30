@@ -29,8 +29,8 @@
 #define STARTUP_BOOST_TORQUE_FACTOR 300
 #define MOTOR_BLOCKED_COUNTER_THRESHOLD 2
 #define MOTOR_BLOCKED_BATTERY_CURRENT_THRESHOLD_X10 5  // mstrens it was 30 for tsdz2, reduce it for testing
-#define MOTOR_BLOCKED_ERPS_THRESHOLD 10                // mstrens it was 20 for tsdz2, decreased because 4 poles instead of 8
-// 20 erps = 1200 erpm =  1200/8 rpm = 150 rpm => 600 erpm => 10erps for 4 poles
+#define MOTOR_BLOCKED_ERPS_THRESHOLD 10               // mstrens it was 20 for tsdz2, TSDZ8 has 4 poles instead of 8, so 2 more ticks for the same speed
+
 #define STARTUP_BOOST_CADENCE_STEP 20       
 #define BATTERY_CURRENT_MAX        5                     // mstrens: it was 13 for tsdz2, reduce for testing
 #define TARGET_MAX_BATTERY_POWER 500
@@ -74,8 +74,8 @@
 #define STREET_MODE_SPEED_LIMIT 25
 #define STREET_MODE_THROTTLE_ENABLED 0
 #define STREET_MODE_CRUISE_ENABLED 0
-#define ADC_THROTTLE_MIN_VALUE 47             // this is mapped to 0
-#define ADC_THROTTLE_MAX_VALUE 176            // to check for TSDZ8 ; this is mapped to 255
+#define ADC_THROTTLE_MIN_VALUE 47             // It is ADC 8 bits ; For tsdz2, it was 47, for tsdz8 it could be 45; we keep 47; this is mapped to 0
+#define ADC_THROTTLE_MAX_VALUE 176            // It is ADC 8 bits ; For TSDZ2, it was 176, for tsdz8 it could be 180; we keep 176 ; this is mapped to 255
 #define MOTOR_TEMPERATURE_MIN_VALUE_LIMIT 65
 #define MOTOR_TEMPERATURE_MAX_VALUE_LIMIT 95
 #define ENABLE_TEMPERATURE_ERROR_MIN_LIMIT 0
@@ -153,8 +153,8 @@
 #define SMOOTH_START_SET_PERCENT 35
 #define TEMPERATURE_SENSOR_TYPE 0
 #define CRUISE_MODE_ENABLED 1
-#define THROTTLE_MODE 0               // see below: when 0, throttle ADC is not used and converted; perhaps it is filled by java based on other parameters
-#define STREET_MODE_THROTTLE_MODE 0   // see below: with the display, it is probably possible to switch from THOTTLE_MODE to STREET_MODE_TROTTLE_MODE
+#define THROTTLE_MODE 4               // see below: when 0, throttle ADC is not used and converted; perhaps it is filled by java based on other parameters
+#define STREET_MODE_THROTTLE_MODE 4   // see below: with the display, it is probably possible to switch from THOTTLE_MODE to STREET_MODE_TROTTLE_MODE
 #define ASSIST_LEVEL_1_OF_5_PERCENT 60
 #define ALTERNATIVE_MILES 0
 

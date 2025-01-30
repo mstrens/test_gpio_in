@@ -1,4 +1,4 @@
 HOSTNAME=DESKTOP-C8IM3LD
-PID=14052
-PIPE=\\.\PIPE\c0c3f82c-939d-4539-94fb-bda3dcfb1769
+PID=6444
+PIPE=\\.\PIPE\9cf6303b-d4a6-49e4-aa42-6504e1b2d4f6
 LIBRARIES=C:/Data/tsdz8/mstrens_test_gpio_in_debug_with_posif/mtb_shared/mtb-xmclib-cat3/release-v4.4.0/props.json;C:/Users/pc/.modustoolbox/global/device-db/release-v4.20.0/props.json

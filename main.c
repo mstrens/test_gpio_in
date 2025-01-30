@@ -59,11 +59,11 @@
 
 
 /* Define macro to enable/disable printing of debug messages */    // for debugging
-#define ENABLE_XMC_DEBUG_VADC_PRINT              (0)
-#define SEND_FRAME_100MS                    (0) // 1 = get the frame from the display (currently do not print them)
-#define RECEIVE_FRAME                       (0) // 1 = send frame to display
-#define ENABLE_DEBUG_HALL_PATTERN           (1)
 
+#define ENABLE_XMC_DEBUG_VADC_PRINT       (0)
+#define SEND_FRAME_100MS                  (0) // 1 = send the frame to the display (currently do not print them)
+#define RECEIVE_FRAME                     (0) // 1 = receive frame from display
+#define ENABLE_PRINT_SOME_DEBUG           (1)
 /*******************************************************************************
 * Macros
 *******************************************************************************/
@@ -102,8 +102,8 @@ const uint8_t message[] = "Hello world!!\r\n";
 const uint8_t clear_screen[] = "Hello from setup\r\n";
 
 
-extern uint8_t ui8_received_package_flag ;
-extern uint8_t ui8_tx_buffer[];
+extern volatile uint8_t ui8_received_package_flag ;
+extern volatile uint8_t ui8_tx_buffer[];
 
 // for debugging
 uint16_t phase_U_timer = 0; // just to debug - see if ccu8 is running
@@ -124,6 +124,8 @@ extern volatile uint32_t posif_print_current_pattern ;
 
 extern volatile uint32_t hall_pattern_irq;                   // current hall pattern
 extern volatile uint16_t hall_pattern_change_ticks_irq; // ticks from ccu4 slice 2 for last pattern change
+extern uint8_t  previous_hall_pattern; 
+
 extern volatile uint16_t ui16_a ;
 extern volatile uint16_t ui16_b ;
 extern volatile uint16_t ui16_c ;
@@ -141,6 +143,7 @@ extern volatile uint16_t debug_time_ccu8_irq1b; // to debug time in irq0 CCU8 (s
 extern volatile uint16_t debug_time_ccu8_irq1c; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 extern volatile uint16_t debug_time_ccu8_irq1d; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 extern volatile uint16_t debug_time_ccu8_irq1e; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
+
 
 
 /*******************************************************************************
@@ -191,6 +194,13 @@ void print_vadc(void);
 void print_system_state();
 void print_hall_pattern_debug();
 void print_hall_pattern_debug2();
+void print_motor_regulation_debug();
+
+//my_CCU8_init(){
+//}
+
+
+
 
 /*******************************************************************************
 * Function Name: main
@@ -212,6 +222,10 @@ int main(void)
 {
     cy_rslt_t result;
 
+    uint32_t wait_time = 6000000;
+    while (wait_time > 0){
+        wait_time--;
+    }
     /* Initialize the device and board peripherals */
     result = cybsp_init();
     if (result != CY_RSLT_SUCCESS)
@@ -229,26 +243,56 @@ int main(void)
 
     // set the PWM in such a way that PWM are set to passive levels when processor is halted for debugging (safety)
     XMC_CCU8_SetSuspendMode(ccu8_0_HW, XMC_CCU8_SUSPEND_MODE_SAFE_STOP);
+    XMC_CCU4_SetSuspendMode(ccu4_0_HW, XMC_CCU4_SUSPEND_MODE_SAFE_STOP);
 
     /* Initialize printf retarget */
     cy_retarget_io_init(CYBSP_DEBUG_UART_HW);
 
     /* System timer configuration */
     SysTick_Config(SystemCoreClock / TICKS_PER_SECOND);
- 
     // CCU8 slice 3 (IRQ at mid point) generates a SR3 when period match and this trigger a VADC group 0 for queue
     // CCU8 slice 2 (PWM) is configured in device generator to generate a sr2 when ONE match
     //  but device configurator does not allow to setup a second trigger for vadc queue conversion
     // some setup has to be done manually in the group1 queue
      // we have to connect sr2 to vadc group1 queue, to activate trigering and to disable gating.
-    
-    
-    #define GxREQTRI 8 // SR2 from CCU8 slice 2
-    const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
+
+    //Here I overwite the config defined in device manage (and generated in cycfg_peripherals.c)     
+/*
+ */
+const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_0_queue_config2 =
+{
+    .conv_start_mode = (uint32_t) XMC_VADC_STARTMODE_WFS,
+    .req_src_priority = (uint32_t) XMC_VADC_GROUP_RS_PRIORITY_3,
+    .src_specific_result_reg = (uint32_t) 0,
+    .trigger_signal = (uint32_t) XMC_VADC_REQ_TR_P, // use gate set up
+    .trigger_edge = (uint32_t) XMC_VADC_TRIGGER_EDGE_ANY,
+    .gate_signal = (uint32_t) XMC_VADC_REQ_GT_E, //use CCU8_ST3A = when timer is at mid period counting up
+    .timer_mode = (uint32_t) false,
+    .external_trigger = (uint32_t) true,
+};
+    XMC_VADC_GROUP_QueueSetGatingMode(vadc_0_group_0_HW, (XMC_VADC_GATEMODE_t) XMC_VADC_GATEMODE_IGNORE);
+    XMC_VADC_GROUP_QueueInit(vadc_0_group_0_HW, &vadc_0_group_0_queue_config2);
+
+const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
         .conv_start_mode = (uint32_t) XMC_VADC_STARTMODE_WFS,
         .req_src_priority = (uint32_t) XMC_VADC_GROUP_RS_PRIORITY_2,
         .src_specific_result_reg = (uint32_t) 0,
-        .trigger_signal = (uint32_t) GxREQTRI,
+        .trigger_signal = (uint32_t) XMC_VADC_REQ_TR_P,  // use gate set up
+        .trigger_edge = (uint32_t) XMC_VADC_TRIGGER_EDGE_ANY,
+        .gate_signal = (uint32_t) XMC_VADC_REQ_GT_E, ////use CCU8_ST3A = when timer is at mid period counting up
+        .timer_mode = (uint32_t) false,
+        .external_trigger = (uint32_t) true,
+    };
+    XMC_VADC_GROUP_QueueSetGatingMode(vadc_0_group_1_HW, (XMC_VADC_GATEMODE_t) XMC_VADC_GATEMODE_IGNORE);
+    XMC_VADC_GROUP_QueueInit(vadc_0_group_1_HW, &vadc_0_group_1_queue_config2);
+
+/*  
+    #define CCU8_SR2_GxREQTRI 8 // SR2 from CCU8 slice 2
+    const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
+        .conv_start_mode = (uint32_t) XMC_VADC_STARTMODE_WFS,
+        .req_src_priority = (uint32_t) XMC_VADC_GROUP_RS_PRIORITY_3,
+        .src_specific_result_reg = (uint32_t) 0,
+        .trigger_signal = (uint32_t) CCU8_SR2_GxREQTRI,
         .trigger_edge = (uint32_t) XMC_VADC_TRIGGER_EDGE_RISING,
         .gate_signal = (uint32_t) 0X01, //DISCARD_VADC_GATING
         .timer_mode = (uint32_t) false,
@@ -256,10 +300,11 @@ int main(void)
     };
     XMC_VADC_GROUP_QueueSetGatingMode(vadc_0_group_1_HW, (XMC_VADC_GATEMODE_t) XMC_VADC_GATEMODE_IGNORE);
     XMC_VADC_GROUP_QueueInit(vadc_0_group_1_HW, &vadc_0_group_1_queue_config2);
-    
+*/    
+
 
     /*Generate a load event to start background request source continuous conversion*/
-    XMC_VADC_GLOBAL_BackgroundTriggerConversion(VADC);
+    //XMC_VADC_GLOBAL_BackgroundTriggerConversion(VADC);
 
     // to test : this could be replaced by an interrupt on CCU4 slice 1 SR0 ( capture done)
     //NVIC_SetPriority(POSIF0_0_IRQn, 1U); //Testing with SR 0 when POSIF detect a valid transition (for debug)
@@ -279,7 +324,11 @@ int main(void)
 	NVIC_EnableIRQ(CCU80_1_IRQn);
 
     // set initial position of hall sensor and first next expected one in shadow and load immediately in real register
-    posif_init_position();
+    //posif_init_position();
+    hall_pattern_irq = XMC_GPIO_GetInput(IN_HALL0_PORT, IN_HALL0_PIN);// hall 0
+    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL1_PORT, IN_HALL1_PIN) << 1;
+    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL2_PORT, IN_HALL2_PIN) << 2;
+    previous_hall_pattern = hall_pattern_irq; 
     XMC_POSIF_Start(HALL_POSIF_HW);
     
     /* Enable Global Start Control CCU80  in a synchronized way*/
@@ -290,6 +339,10 @@ int main(void)
         //SEGGER_RTT_printf(0, "Retry CCU8 start; still %u try\r\n", retry_counter);
     }
 
+//    XMC_VADC_GLOBAL_EnablePostCalibration(vadc_0_HW, 0U);
+//    XMC_VADC_GLOBAL_EnablePostCalibration(vadc_0_HW, 1U);
+//    XMC_VADC_GLOBAL_StartupCalibration(vadc_0_HW);
+    
 
     // todo : change when eeprom is coded properly add some initialisation (e.g. m_configuration_init() and ebike_app.init)
     m_configuration_init();
@@ -327,36 +380,25 @@ int main(void)
 //***************************** while ************************************
     while (1) // main loop
     {     
-        #if (RECEIVE_FRAME) // read uart and process when a frame is received
-        while ( XMC_USIC_CH_RXFIFO_GetLevel(CYBSP_DEBUG_UART_HW) ){
+	    // when there is no frame waiting for process, try to get incoming data from UART but do not process them
+        // When frame is full, data are processed in ebike_app.c
+        if (ui8_received_package_flag) {
             fillRxBuffer();
         }
-        if (ui8_received_package_flag){
-            processRxBuffer();
+
+        // to be activated for real production
+        // Here we should call a funtion every 25 msec (based on systick or on an interrupt based on a CCU4 timer)
+        #if (AUTOMATIC_ROTATION != 1)
+        if ((system_ticks - loop_25ms_ticks) > 25) { 
+            loop_25ms_ticks = system_ticks;
+            ebike_app_controller();  // this performs some checks and update some variable every 25 msec
         }
         #endif
+              
+        #if (uCPROBE_GUI_OSCILLOSCOPE == MY_ENABLED)
+        ProbeScope_Sampling(); // this should be moved e.g. in a interrupt that run faster
+        #endif
         
-        /* once every X sec  */
-        if ((system_ticks - start) > USER_LED_TOGGLE_PERIOD_MS) {
-            start = system_ticks;
-            count++; // increase count (to be checked with debug tool)
-                        // toggle output (light on P1.5)
-            XMC_GPIO_ToggleOutput(OUT_LIGHT_PORT,OUT_LIGHT_PIN); // toggle the output
-            #if (uCPROBE_GUI_OSCILLOSCOPE == MY_ENABLED)
-            ProbeScope_Sampling(); // this should be moved e.g. in a interrupt that run faster
-            #endif
-            // send Hello
-            /*
-            for (index = 0; index < sizeof(message) - 1; index++)
-            {
-                // Send a message via UART periodically 
-                XMC_UART_CH_Transmit(CYBSP_DEBUG_UART_HW, message[index]);
-            }
-            */
-            #if (ENABLE_XMC_DEBUG_VADC_PRINT == 1)
-                print_vadc();  
-            #endif
-        }
         // once evey 100 msec send a dummy frame to display for debug
         #if (SEND_FRAME_100MS)
         if ((system_ticks- send_frame_ticks) > USER_SEND_FRAME) { // send a frame every 100 msec
@@ -370,39 +412,47 @@ int main(void)
         }
         #endif
         // for debug
-        
+    #if (DEBUG_ON_UART == 1 )
         if (new_hall) {
             ccu4_S2_timer = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
             //SEGGER_RTT_printf(0,"angle= %u pins= %u a=%u b=%u c=%u tim=%u\r\n ",
             //    (uint32_t) ui16_new_angle_print , (uint32_t) hall_print_pos , (uint32_t) ui16_a , (uint32_t)ui16_b , (uint32_t)ui16_c ,
             //     (uint32_t)ccu4_S2_timer);
             printf("angle= %u pins= %u a=%u b=%u c=%u tim=%u\r\n ",
-                (uint32_t) ui16_new_angle_print , (uint32_t) hall_print_pos , (uint32_t) ui16_a , (uint32_t)ui16_b , (uint32_t)ui16_c ,
-                 (uint32_t)ccu4_S2_timer);
+                 (unsigned int) ui16_new_angle_print , (unsigned int) hall_print_pos ,  (unsigned int) ui16_a , (unsigned int) ui16_b , (unsigned int) ui16_c ,
+                 (unsigned int) ccu4_S2_timer);
             new_hall = false;
         }
         
-       // to be activated for real production
-       // Here we should call a funtion every 25 msec (based on systick or on an interrupt based on a CCU4 timer)
-        #if (AUTOMATIC_ROTATION != 1)
-        if ((system_ticks - loop_25ms_ticks) > 25) { 
-            loop_25ms_ticks = system_ticks;
-            ebike_app_controller();  // this performs some checks and update some variable every 25 msec
-        }
-        #endif
         //to debug print any error
-       if (ui8_system_state) { // print a message when there is an error detected
-            print_system_state();
-       }
-       #if (ENABLE_DEBUG_HALL_PATTERN == 1)
-       print_hall_pattern_debug();
-       //print_hall_pattern_debug2();
-       #endif
+        if (ui8_system_state) { // print a message when there is an error detected
+                if( take_action(4,500)) print_system_state();
+        }
+        #if (ENABLE_PRINT_SOME_DEBUG == 1)
+        //if (take_action(0, 250)) print_hall_pattern_debug();
+        //if (take_action(6, 250)) print_motor_regulation_debug(); // print duty cycle and current (target ar real)
+        
+        // print Throttle  throttle gr1 ch7 result 5  in bg  p2.5)
+        //if (take_action(3,500)) printf("Throttle adc 8 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0x0FFF) >> 4); 
        
+       // print torque sensor group 0 ch7 , result 2 , pin 2.2
+       if (take_action(7,500)) printf("Torque adc 12 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ) & 0xFFFF) );  
+
+       // print batery sensor group 1 ch6 , result 4 , pin 2.4
+       //if (take_action(8,500)) printf("Battery adc 12 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 4 ) & 0xFFFF) );  
+
+       // print CCU4 torque is running or not
+       if (take_action(9,500)) printf("CCU4 s3= %u\r\n", XMC_CCU4_SLICE_GetTimerValue(PWM_TORQUE_TIMER_HW  ) );  
+
+       //print_hall_pattern_debug2(); // print first 100 passage in ccu8 irq0
+        
+       #endif
+    #endif   
        
     } // end while main loop
 }
 
+/*
 void print_vadc(void) {
     uint32_t vadc22 = 0;
     uint32_t vadc23 = 0;
@@ -416,9 +466,9 @@ void print_vadc(void) {
     uint32_t vadc211 = 0;
 
     uint32_t vadc28bis = 0;
-    uint32_t vadc29bis = 0;
-    uint32_t vadc210bis = 0;
-    uint32_t vadc211bis = 0;
+    //uint32_t vadc29bis = 0;
+    //uint32_t vadc210bis = 0;
+    //uint32_t vadc211bis = 0;
 
     vadc22 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ); // torque
     vadc23 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 3 ); // unknow
@@ -432,10 +482,10 @@ void print_vadc(void) {
     vadc211 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 11 ); // current W
     
     vadc28bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ); // current
-    vadc29bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 13 ); // current U
-    vadc210bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 14 ); // current V
-    vadc211bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 15 ); // current W
-/* Prints the result in UART Terminal */
+    //vadc29bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 13 ); // current U
+    //vadc210bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 14 ); // current V
+    //vadc211bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 15 ); // current W
+    //Prints the result in UART Terminal 
     printf("Torque= %lx \r\n", vadc22);
     //printf("2.3= %lx \r\n", vadc23);
     printf("Batt= %lx \r\n", vadc24);
@@ -452,7 +502,7 @@ void print_vadc(void) {
     //printf("2.10bis= %lx \r\n", vadc210bis);
     //printf("2.11bis= %lx \r\n", vadc211bis);
 }
-
+*/ 
 void print_system_state(){
     switch (ui8_system_state) {
         case 1: 
@@ -486,9 +536,22 @@ void print_system_state(){
     }
 }    
 
-
+void print_motor_regulation_debug(){
+        debug_values_copy[11] = debug_values[11] ;// ui8_controller_duty_cycle_target;
+        debug_values_copy[1] = debug_values[1] ;// ui8_g_duty_cycle;
+        debug_values_copy[12] = debug_values[12] ;// ui8_controller_adc_battery_current_target;
+        debug_values_copy[3] = debug_values[3] ; // ui8_adc_battery_current_filtered;
+        debug_values_copy[14] =debug_values[14]; // ui8_adc_battery_current_acc
+        debug_values_copy[15] = (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0xFFFF);
+        debug_values_copy[16] = (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ) & 0xFFFF);
+        printf("dctarg=%u dc=%u  ctarg=%u cfilt=%u acc=%u G0=%u G1=%u\r\n",
+            (unsigned int) debug_values_copy[11], (unsigned int) debug_values_copy[1],(unsigned int) debug_values_copy[12],
+             (unsigned int) debug_values_copy[3],(unsigned int) debug_values_copy[14],
+            (unsigned int) debug_values_copy[15],
+            (unsigned int) debug_values_copy[16]);
+    
+}
 void print_hall_pattern_debug(){
-    if (take_action(0, 250)){ // every 500ms
         debug_values_copy[0] = debug_values[0] ; // ui8_svm_table_index
         debug_values_copy[1] = debug_values[1] ; // ui8_g_duty_cycle;
         debug_values_copy[2] = debug_values[2] ; // ui8_controller_adc_battery_current_target;
@@ -507,12 +570,13 @@ void print_hall_pattern_debug(){
         // 6 ticks intervals between hall patern changes
         SEGGER_RTT_WriteString(0, "SEGGER Real-Time-Terminal Sample\r\n\r\n");
         printf("idx=%u dc=%u ct=%u cf=%u cty=%u ia=%u et=%u ct=%0u hct=%u hpe=%u hpv=%u dct=%u doa=%u cadc=%u cavg=%u, 1=%u 2=%u 3=%u 4=%u  5=%u  6=%u\r\n",
-            debug_values_copy[0], debug_values_copy[1],debug_values_copy[2],
-            debug_values_copy[3], debug_values_copy[4] , debug_values_copy[5],
-            debug_values_copy[6], debug_values_copy[7], debug_values_copy[8],
-            debug_values_copy[9], debug_values_copy[10] ,debug_values_copy[11] , debug_values_copy[13] , current_adc, current_average,
-            hall_pattern_intervals[1],hall_pattern_intervals[2],hall_pattern_intervals[3],
-            hall_pattern_intervals[4],hall_pattern_intervals[5],hall_pattern_intervals[6] );
+            (unsigned int) debug_values_copy[0], (unsigned int) debug_values_copy[1],(unsigned int) debug_values_copy[2],
+            (unsigned int) debug_values_copy[3], (unsigned int) debug_values_copy[4] , (unsigned int) debug_values_copy[5],
+            (unsigned int) debug_values_copy[6], (unsigned int) debug_values_copy[7], (unsigned int) debug_values_copy[8],
+            (unsigned int) debug_values_copy[9], (unsigned int) debug_values_copy[10] ,(unsigned int) debug_values_copy[11] ,
+            (unsigned int)  debug_values_copy[13] , (unsigned int) current_adc, current_average,
+            (unsigned int) hall_pattern_intervals[1],(unsigned int) hall_pattern_intervals[2],(unsigned int) hall_pattern_intervals[3],
+            (unsigned int) hall_pattern_intervals[4],(unsigned int) hall_pattern_intervals[5],(unsigned int) hall_pattern_intervals[6] );
         
         /*
         SEGGER_RTT_printf(0, "idx=%-3u dc=%-3u ct=%-4u cf=%-4u cty=%-4u ia=%-6u et=%-5u ct=%-10u hct=%-5u hpe=%-3u hpv=%-3u dct=%-3u doa=%-3u cadc=%-4u cavg=%-4u, 1=%-4u 2=%-4u 3=%-4u 4=%-4u  5=%-4u  6=%-4u\r\n",
@@ -537,7 +601,7 @@ void print_hall_pattern_debug(){
         #ifdef XMC_ASSERT_ENABLE
         printf("XMC_ASSERT_ENABLE\n\r");
         #endif
-    }
+    
 }
 
 uint32_t first_debug_values[100][20];
@@ -549,7 +613,7 @@ void print_hall_pattern_debug2(){
         printf("Now since pattern angle delay d_c_t d_c cur_t curr      error valid com_t rot_ticks ofa refV\r\n");
         for (uint32_t i = 0; i<LINES; i++){
             for (uint32_t j = 0; j<15; j++){
-                printf("%u ", first_debug_values[i][j]);
+                printf("%u ", (unsigned int) first_debug_values[i][j]);
                 if (j == 8) {    // put a space before the error counter
                     printf("    ");
                 }
