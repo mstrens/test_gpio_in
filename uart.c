@@ -37,6 +37,10 @@ volatile uint8_t ui8_display_fault_code = 0;
 
 
 void fillRxBuffer() {
+	if (XMC_USIC_CH_RXFIFO_IsEmpty(	CYBSP_DEBUG_UART_HW	))	return; // Skip when there is no data in rxfifo 
+	
+	// when there are data:
+
 	// Read data : Reading data clear UART2_FLAG_RXNE flag
 	uint8_t	ui8_byte_received = (uint8_t) XMC_USIC_CH_RXFIFO_GetData(CYBSP_DEBUG_UART_HW);
 
@@ -106,7 +110,7 @@ void fillRxBuffer() {
 #define ERROR_WRITE_EEPROM  					  	9 // E09 shared (E08 blinking for XH18)
 #define ERROR_MOTOR_CHECK                       	9 // E09 shared (E08 blinking for XH18)
 
-void uart_receive_package() {
+void uart_receive_package() {  // once every 4*25 msec = 100 msec
 	uint8_t ui8_i;
 	uint8_t ui8_rx_check_code;
 	uint8_t ui8_assist_level_mask;
@@ -175,18 +179,18 @@ void uart_receive_package() {
 				if ((!ui8_lights_flag)&&
 				  ((m_configuration_variables.ui8_set_parameter_enabled)||
 				  (ui8_assist_level == OFF)||
-				  ((ui8_startup_counter < DELAY_MENU_ON)&&(ui8_assist_level == TURBO)))) {
+				  ((ui8_startup_counter < DELAY_MENU_ON)&&(ui8_assist_level == TURBO)))) { // delay menu on = 50 => 5sec
 					// lights 5s on
 					ui8_lights_on_5s = 1;
 					
 					// menu flag
-					if (!ui8_menu_flag)
+					if (!ui8_menu_flag) 
 					{
 						// set menu flag
 						ui8_menu_flag = 1;
 							
 						// set menu index
-						if (++ui8_menu_index > 3) {
+						if (++ui8_menu_index > 3) { 
 							ui8_menu_index = 3;
 						}
 						
@@ -226,7 +230,7 @@ void uart_receive_package() {
 											// set display torque sensor step for calibration
 											ui8_display_torque_sensor_step = 1;
 											// delay display torque sensor step for calibration
-											ui8_delay_display_function = DELAY_DISPLAY_TORQUE_CALIBRATION;
+											ui8_delay_display_function = DELAY_DISPLAY_TORQUE_CALIBRATION; //250 = 25 sec
 										}
 										else if (ui8_display_torque_sensor_flag_1) {
 											// restore torque sensor advanced
@@ -236,7 +240,7 @@ void uart_receive_package() {
 											// set display torque sensor value for calibration
 											ui8_display_torque_sensor_value = 1;
 											// delay display torque sensor value for calibration
-											ui8_delay_display_function = DELAY_DISPLAY_TORQUE_CALIBRATION;
+											ui8_delay_display_function = DELAY_DISPLAY_TORQUE_CALIBRATION; // 25 sec
 										}
 										break;
 								}
@@ -272,7 +276,7 @@ void uart_receive_package() {
 										break;
 								}							
 								break;
-						}
+						} // end of switch
 						
 						// display function code enabled (E02, E03,E04)
 						ui8_display_function_code = ui8_menu_index + 1;
@@ -338,7 +342,7 @@ void uart_receive_package() {
 				}
 			}
 
-			// restart menu display function
+			// restart menu display function (after some delay or (if assist level changed and not torque calib and not auto display)
 			if ((ui8_menu_counter >= ui8_delay_display_function)||
 			  ((ui8_assist_level != ui8_assist_level_temp)&&(!ui8_torque_sensor_calibration_flag)&&(!ui8_auto_display_data_flag)))
 			{					
@@ -383,7 +387,7 @@ void uart_receive_package() {
 									// for restore set parameter
 									ui8_set_parameter_enabled_temp = m_configuration_variables.ui8_set_parameter_enabled;
 									
-									// set parameter enabled
+									// set parameter enabled  // invert the parameter
 									m_configuration_variables.ui8_set_parameter_enabled = !m_configuration_variables.ui8_set_parameter_enabled;
 									ui8_display_function_status[0][OFF] = m_configuration_variables.ui8_set_parameter_enabled;
 									break;
@@ -397,7 +401,7 @@ void uart_receive_package() {
 									break;
 								case 3:
 									// save current configuration
-	// mstrens todo								//EEPROM_controller(WRITE_TO_MEMORY, EEPROM_BYTES_INIT_OEM_DISPLAY);
+	// mstrens todo	!!!!!!!!						//EEPROM_controller(WRITE_TO_MEMORY, EEPROM_BYTES_INIT_OEM_DISPLAY);
 									break;
 							}
 							break;
@@ -421,7 +425,7 @@ void uart_receive_package() {
 									m_configuration_variables.ui8_startup_boost_enabled = !m_configuration_variables.ui8_startup_boost_enabled;
 									ui8_display_function_status[1][ECO] = m_configuration_variables.ui8_startup_boost_enabled;
 									break;
-								case 3:
+								case 3: // is used for 2 functions (torque sensor adv ON/OFF or for torque sensor calibration)
 									if (!ui8_display_torque_sensor_value)
 									{
 										// for restore torque sensor advanced
@@ -440,7 +444,7 @@ void uart_receive_package() {
 											ui8_riding_mode_temp = m_configuration_variables.ui8_riding_mode;
 										}
 										// special riding mode (torque sensor calibration)
-										m_configuration_variables.ui8_riding_mode = TORQUE_SENSOR_CALIBRATION_MODE;
+										m_configuration_variables.ui8_riding_mode = TORQUE_SENSOR_CALIBRATION_MODE; // 8 = special mode for calibration
 										
 										// set display torque sensor flag 2 for step calibration
 										ui8_display_torque_sensor_flag_2 = 1;
@@ -452,9 +456,9 @@ void uart_receive_package() {
 						case TOUR:
 							// set riding mode 1
 							switch (ui8_menu_index) {
-								case 1: m_configuration_variables.ui8_riding_mode = POWER_ASSIST_MODE; break;
-								case 2: m_configuration_variables.ui8_riding_mode = TORQUE_ASSIST_MODE; break;
-								case 3: m_configuration_variables.ui8_riding_mode = CADENCE_ASSIST_MODE; break;
+								case 1: m_configuration_variables.ui8_riding_mode = POWER_ASSIST_MODE; break; // 1
+								case 2: m_configuration_variables.ui8_riding_mode = TORQUE_ASSIST_MODE; break; // 2
+								case 3: m_configuration_variables.ui8_riding_mode = CADENCE_ASSIST_MODE; break; // 3
 							}
 							ui8_display_riding_mode = m_configuration_variables.ui8_riding_mode;
 							break;
@@ -462,9 +466,9 @@ void uart_receive_package() {
 						case SPORT:
 							// set riding mode 2
 							switch (ui8_menu_index) {
-								case 1:	m_configuration_variables.ui8_riding_mode = eMTB_ASSIST_MODE; break;
-								case 2: m_configuration_variables.ui8_riding_mode = HYBRID_ASSIST_MODE; break;          
-								case 3: m_configuration_variables.ui8_riding_mode = CRUISE_MODE; break;
+								case 1:	m_configuration_variables.ui8_riding_mode = eMTB_ASSIST_MODE; break; // 4
+								case 2: m_configuration_variables.ui8_riding_mode = HYBRID_ASSIST_MODE; break;  // 5        
+								case 3: m_configuration_variables.ui8_riding_mode = CRUISE_MODE; break; // 6
 							}
 							ui8_display_riding_mode = m_configuration_variables.ui8_riding_mode;
 							break;
@@ -473,7 +477,7 @@ void uart_receive_package() {
 							// set lights mode
 							switch (ui8_menu_index) {
 								case 1:  
-									if (ui8_startup_counter < DELAY_MENU_ON) {
+									if (ui8_startup_counter < DELAY_MENU_ON) {  // 5 sec
 										// manually setting battery percentage x10 (actual charge) within 5 seconds of power on
 										ui16_battery_SOC_percentage_x10 = read_battery_soc();
 										// calculate watt-hours x10
@@ -482,18 +486,18 @@ void uart_receive_package() {
 										ui8_display_battery_soc = 1;
 									}
 									else {
-										// for restore lights configuration
+										// for restore lights configuration (Light ON (0) - Light flashing (1))
 										ui8_lights_configuration_temp = m_configuration_variables.ui8_lights_configuration;
 									
 										if (m_configuration_variables.ui8_lights_configuration != LIGHTS_CONFIGURATION_ON_STARTUP) {
-											m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_ON_STARTUP;
+											m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_ON_STARTUP; // 0
 										}
 										else {
-											m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_1;
+											m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_1; // 1
 										}
 									}
 									break;
-								case 2:
+								case 2: // - LIGHTS ON & BRAKE FLASHING or ASSIST WITHOUT PEDALIG ROTATION (0 / 1)
 									if (ui8_lights_configuration_2 == 9) {
 										// for restore assist without pedal rotation
 										ui8_assist_without_pedal_rotation_temp = m_configuration_variables.ui8_assist_without_pedal_rotation_enabled;
@@ -505,13 +509,13 @@ void uart_receive_package() {
 										ui8_display_alternative_lights_configuration = 1;
 									}
 									else {
-										m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_2;
+										m_configuration_variables.ui8_lights_configuration = LIGHTS_CONFIGURATION_2;  // 9
 										// for restore lights configuration
 										ui8_lights_configuration_temp = m_configuration_variables.ui8_lights_configuration;
 									
 									}
 									break;
-								case 3:
+								case 3: // LIGHTS FLASHING & BRAKE ON or ASSIST WITH SENSORS ERROR (0 / 1)
 									if (ui8_lights_configuration_3 == 10) {
 										// change system error enabled
 										m_configuration_variables.ui8_assist_with_error_enabled = !m_configuration_variables.ui8_assist_with_error_enabled;
@@ -531,7 +535,7 @@ void uart_receive_package() {
 					
 					// delay display menu function 
 					if (!ui8_display_torque_sensor_value)
-						ui8_delay_display_function = DELAY_MENU_ON;
+						ui8_delay_display_function = DELAY_MENU_ON;  // 5 sec
 					
 					// display data value enabled
 					ui8_display_data_enabled = 1;
@@ -541,7 +545,7 @@ void uart_receive_package() {
 			// display function status VLCD5/6
 			#if ENABLE_VLCD5 || ENABLE_VLCD6
 			if (ui8_menu_flag) {
-				if (ui8_menu_counter >= DELAY_FUNCTION_STATUS)
+				if (ui8_menu_counter >= DELAY_FUNCTION_STATUS)  // 2,5 sec
 					// display function code disabled
 					ui8_display_function_code = NO_FUNCTION;
 			}
@@ -705,7 +709,8 @@ void uart_receive_package() {
 			
 			// automatic data display at lights on
 			if (m_configuration_variables.ui8_auto_display_data_enabled) {	
-				if ((ui8_lights_flag)&&(!ui8_menu_index)&&(!ui8_display_battery_soc)&&(!ui8_display_torque_sensor_value)&&(!ui8_display_torque_sensor_step)) {
+				if ((ui8_lights_flag) && (!ui8_menu_index) && (!ui8_display_battery_soc) &&
+						(!ui8_display_torque_sensor_value) && (!ui8_display_torque_sensor_step)) {
 					if (!ui8_auto_display_data_flag) {	
 						// set auto display data flag
 						ui8_auto_display_data_flag = 1;
@@ -720,10 +725,10 @@ void uart_receive_package() {
 						ui8_assist_level_temp = ui8_assist_level;
 						// delay data function
 						if (ui8_delay_display_array[ui8_data_index]) {
-							ui8_delay_display_function  = ui8_delay_display_array[ui8_data_index];
+							ui8_delay_display_function  = ui8_delay_display_array[ui8_data_index]; // ecpected delay if not 0
 						}
 						else {
-							ui8_delay_display_function  = DELAY_MENU_ON;
+							ui8_delay_display_function  = DELAY_MENU_ON; // 5 sec
 						}
 					}
 					
@@ -781,7 +786,7 @@ void uart_receive_package() {
 			ui8_oem_wheel_diameter = ui8_rx_buffer[3];
 			
 			// factor to calculate the value of the data to be displayed
-			ui16_display_data_factor = OEM_WHEEL_FACTOR * ui8_oem_wheel_diameter;
+			ui16_display_data_factor = OEM_WHEEL_FACTOR * ui8_oem_wheel_diameter; // OEM_WHEEL_FACTOR = 1435
 			
 			// ui8_rx_buffer[4] test?
 			
@@ -796,11 +801,11 @@ void uart_receive_package() {
 			// set speed limit in street, offroad, walk assist, startup assist, throttle 6km/h mode
 			if ((m_configuration_variables.ui8_riding_mode == WALK_ASSIST_MODE)
 				||(ui8_startup_assist_flag)) {
-				m_configuration_variables.ui8_wheel_speed_max = WALK_ASSIST_THRESHOLD_SPEED;
+				m_configuration_variables.ui8_wheel_speed_max = WALK_ASSIST_THRESHOLD_SPEED; // 6
 			}
 			else if ((ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled] == W_O_P_6KM_H_ONLY)
 				&& (ui8_throttle_adc_in)) {
-					m_configuration_variables.ui8_wheel_speed_max = WALK_ASSIST_THRESHOLD_SPEED;
+					m_configuration_variables.ui8_wheel_speed_max = WALK_ASSIST_THRESHOLD_SPEED;  // 6
 			}
 			else {
 				m_configuration_variables.ui8_wheel_speed_max = ui8_wheel_speed_max_array[m_configuration_variables.ui8_street_mode_enabled];
@@ -996,7 +1001,7 @@ void uart_send_package(){
 			if ((ui8_auto_display_data_status)
 			  || (m_configuration_variables.ui8_assist_with_error_enabled)) {
 				// display data
-				ui8_tx_buffer[5] = CLEAR_DISPLAY;
+				ui8_tx_buffer[5] = CLEAR_DISPLAY; // 0
 			}
 			else {
 				// fault code
@@ -1073,20 +1078,24 @@ void uart_send_package(){
 			else if (ui8_display_torque_sensor_value) {
 				ui16_display_data = (uint16_t) ui16_display_data_factor / ui16_adc_torque;
 			}
-			else if ((ui8_menu_counter <= ui8_delay_display_function)&&(ui8_menu_index)&&((ui8_assist_level < 2)||(ui8_display_alternative_lights_configuration))) { // OFF & ECO & alternative lights configuration
+			else if ((ui8_menu_counter <= ui8_delay_display_function) && 
+					(ui8_menu_index) && 
+					((ui8_assist_level < 2)||(ui8_display_alternative_lights_configuration))) { // OFF & ECO & alternative lights configuration
 			  uint8_t index_temp = (ui8_display_function_status[ui8_menu_index - 1][ui8_assist_level]);
 			  switch (index_temp) {
 				case 0:
-					ui16_display_data = (uint16_t) ui16_display_data_factor / FUNCTION_STATUS_OFF;
+					ui16_display_data = (uint16_t) ui16_display_data_factor / FUNCTION_STATUS_OFF; // 1
 				  break;
 				case 1:
-					ui16_display_data = (uint16_t) ui16_display_data_factor / FUNCTION_STATUS_ON;
+					ui16_display_data = (uint16_t) ui16_display_data_factor / FUNCTION_STATUS_ON; //105
 				  break;
 				default:
 				  break;
 			  }
 			}
-			else if ((ui8_menu_counter <= ui8_delay_display_function)&&(ui8_menu_index)&&(ui8_assist_level == TURBO)) {
+			else if ((ui8_menu_counter <= ui8_delay_display_function) &&
+						(ui8_menu_index) && 
+						(ui8_assist_level == TURBO)) {
 				ui16_display_data = (uint16_t) ui16_display_data_factor / (ui8_display_lights_configuration * 100 + DISPLAY_STATUS_OFFSET);
 			}
 			else if ((ui8_menu_counter <= ui8_delay_display_function)&&(ui8_menu_index)) {
@@ -1114,7 +1123,8 @@ void uart_send_package(){
 					ui16_display_data = (uint16_t) ui16_display_data_factor / ui16_battery_voltage_calibrated_x10;
 				  break;
 				case 3:
-					ui16_display_data = (uint16_t) ui16_display_data_factor / ui8_battery_current_filtered_x10;
+					//ui16_display_data = (uint16_t) ui16_display_data_factor / ui8_battery_current_filtered_x10;
+					ui16_display_data = 62;
 				  break;
 				case 4:
 					// battery power filtered x 10 for display data
@@ -1255,5 +1265,12 @@ void uart_send_package(){
 			ui8_tx_check_code += ui8_tx_buffer[ui8_i];
 		}
 		ui8_tx_buffer[TX_CHECK_CODE] = ui8_tx_check_code;
+		// send the buffer on uart
+		if ((30 - XMC_USIC_CH_TXFIFO_GetLevel(CYBSP_DEBUG_UART_HW) ) >= 10){ // check if there is enough free space in Txfifo
+			for(uint8_t i = 0; i < 9; i++)  {
+				XMC_USIC_CH_TXFIFO_PutData(CYBSP_DEBUG_UART_HW, (uint16_t) ui8_tx_buffer[i]);
+				//XMC_UART_CH_Transmit(CYBSP_DEBUG_UART_HW , ui8_tx_buffer[i]);
+			}
+		}	 
 	}
 }

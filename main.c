@@ -63,7 +63,7 @@
 #define ENABLE_XMC_DEBUG_VADC_PRINT       (0)
 #define SEND_FRAME_100MS                  (0) // 1 = send the frame to the display (currently do not print them)
 #define RECEIVE_FRAME                     (0) // 1 = receive frame from display
-#define ENABLE_PRINT_SOME_DEBUG           (1)
+#define ENABLE_PRINT_SOME_DEBUG           (0)
 /*******************************************************************************
 * Macros
 *******************************************************************************/
@@ -105,14 +105,7 @@ const uint8_t clear_screen[] = "Hello from setup\r\n";
 extern volatile uint8_t ui8_received_package_flag ;
 extern volatile uint8_t ui8_tx_buffer[];
 
-// for debugging
-uint16_t phase_U_timer = 0; // just to debug - see if ccu8 is running
-uint16_t phase_V_timer = 0; // just to debug - see if ccu8 is running
-uint16_t phase_W_timer = 0; // just to debug - see if ccu8 is running
-uint16_t phase_U_comp = 0; // just to debug - see if ccu8 is running
-uint16_t phase_V_comp = 0; // just to debug - see if ccu8 is running
-uint16_t phase_W_comp = 0; // just to debug - see if ccu8 is running
-
+// for debugging // probably to remove todo
 extern volatile uint32_t hall_print_pos ; 
 extern volatile uint32_t hall_print_angle ;
 extern volatile bool new_hall ;   
@@ -136,7 +129,7 @@ extern uint16_t ui16_new_angle_print;
 uint16_t ccu4_S2_timer ; 
 extern uint16_t current_average ;
 extern uint16_t hall_pattern_intervals[8];
-
+// to measure time in irq
 extern volatile uint16_t debug_time_ccu8_irq0; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 extern volatile uint16_t debug_time_ccu8_irq1; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 extern volatile uint16_t debug_time_ccu8_irq1b; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
@@ -144,8 +137,10 @@ extern volatile uint16_t debug_time_ccu8_irq1c; // to debug time in irq0 CCU8 (s
 extern volatile uint16_t debug_time_ccu8_irq1d; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 extern volatile uint16_t debug_time_ccu8_irq1e; // to debug time in irq0 CCU8 (should be less than 25usec; 1 = 4 usec )
 
-
-
+extern volatile uint8_t ui8_adc_battery_current_filtered;
+extern uint8_t ui8_battery_current_filtered_x10;
+extern uint16_t ui16_adc_battery_current_acc_X8;
+extern uint16_t ui16_display_data_factor; 
 /*******************************************************************************
 * Function Name: SysTick_Handler
 ********************************************************************************
@@ -196,6 +191,8 @@ void print_hall_pattern_debug();
 void print_hall_pattern_debug2();
 void print_motor_regulation_debug();
 
+void jlink_print_system_state();
+
 //my_CCU8_init(){
 //}
 
@@ -222,8 +219,8 @@ int main(void)
 {
     cy_rslt_t result;
 
-    uint32_t wait_time = 6000000;
-    while (wait_time > 0){
+    uint32_t wait_time = 600000;
+    while (wait_time > 0){  // wait a little at power on to let VCC be stable and so get probably better ADC conversions
         wait_time--;
     }
     /* Initialize the device and board peripherals */
@@ -325,17 +322,18 @@ const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
 
     // set initial position of hall sensor and first next expected one in shadow and load immediately in real register
     //posif_init_position();
-    hall_pattern_irq = XMC_GPIO_GetInput(IN_HALL0_PORT, IN_HALL0_PIN);// hall 0
-    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL1_PORT, IN_HALL1_PIN) << 1;
-    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL2_PORT, IN_HALL2_PIN) << 2;
-    previous_hall_pattern = hall_pattern_irq; 
+    get_hall_pattern();
+    previous_hall_pattern = 0; // use a different hall pattern to force the angle. 
     XMC_POSIF_Start(HALL_POSIF_HW);
     
     /* Enable Global Start Control CCU80  in a synchronized way*/
     XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
-    uint32_t retry_counter = 10;
-    while ((!XMC_CCU8_SLICE_IsTimerRunning(PHASE_U_TIMER_HW)) && (retry_counter > 0)){
+    XMC_SCU_SetCcuTriggerLow(SCU_GENERAL_CCUCON_GSC80_Msk);
+    uint32_t retry_start_counter = 10;
+    while ((!XMC_CCU8_SLICE_IsTimerRunning(PHASE_U_TIMER_HW)) && (retry_start_counter > 0)){ // to be sure it is running
         XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
+        XMC_SCU_SetCcuTriggerLow(SCU_GENERAL_CCUCON_GSC80_Msk);
+    
         //SEGGER_RTT_printf(0, "Retry CCU8 start; still %u try\r\n", retry_counter);
     }
 
@@ -356,36 +354,16 @@ const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
     #if (SEND_FRAME_100MS)   // for debugging
     uint32_t send_frame_ticks = system_ticks;
     #endif
-
-    
-    /*
-    // to test the performance of the divider of XMC13
-    uint32_t numerator = 1234567;
-    uint32_t denomminator = 1234;
-    uint32_t div_result;
-    uint16_t start = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
-    for (uint32_t i = 100; i>0; i--){
-            XMC_MATH_DIV_UnsignedDivNB(numerator, denomminator)	;
-            div_result = XMC_MATH_DIV_GetUnsignedDivResult();
-    }
-    uint16_t end = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
-    printf("delay for 100 division = %ld usec  result is %ld\r\n", (uint32_t) (end - start) * 4, div_result);
-    */
-    // for debugging try to start once the VADC group trigger queue 
-    //XMC_VADC_GROUP_QueueTriggerConversion	( vadc_0_group_0_HW);
-
-    //NVIC_SetPriority(POSIF0_0_IRQn, 0U); // this is just to have a link to the definition of the interrupt number
-
     
 //***************************** while ************************************
     while (1) // main loop
     {     
-	    // when there is no frame waiting for process, try to get incoming data from UART but do not process them
-        // When frame is full, data are processed in ebike_app.c
-        if (ui8_received_package_flag) {
+	    // when there is no frame waiting for process (ui8_received_package_flag == 0), try to get incoming data from UART but do not process them
+        // When frame is full, data are processed in ebike_app.c once every 100 msec
+        if (ui8_received_package_flag == 0) {
             fillRxBuffer();
+            // if (ui8_received_package_flag) SEGGER_RTT_printf(0,"Frame in\r\n"); // just for debug
         }
-
         // to be activated for real production
         // Here we should call a funtion every 25 msec (based on systick or on an interrupt based on a CCU4 timer)
         #if (AUTOMATIC_ROTATION != 1)
@@ -399,19 +377,30 @@ const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
         ProbeScope_Sampling(); // this should be moved e.g. in a interrupt that run faster
         #endif
         
-        // once evey 100 msec send a dummy frame to display for debug
-        #if (SEND_FRAME_100MS)
-        if ((system_ticks- send_frame_ticks) > USER_SEND_FRAME) { // send a frame every 100 msec
-            send_frame_ticks = system_ticks;
-            fillTxBuffer();
-            // send the full package to UART
-            for(uint8_t i = 0; i < 9; i++)
-            {
-                XMC_UART_CH_Transmit(CYBSP_DEBUG_UART_HW , ui8_tx_buffer[i]);
-            }    
-        }
-        #endif
         // for debug
+    #if (DEBUG_ON_JLINK == 1)
+         // do debug if communication with display is working
+        //if( take_action(1, 250)) SEGGER_RTT_printf(0,"Light is= %u\r\n", (unsigned int) ui8_lights_button_flag);
+        if (ui8_system_state) { // print a message when there is an error detected
+            if( take_action(4,500)) jlink_print_system_state();
+        }
+//        if( take_action(2, 500)) SEGGER_RTT_printf(0,"Adc current= %u adcX8=%u  current_Ax10=%u  factor=%u\r\n", 
+//            (unsigned int) ui8_adc_battery_current_filtered ,
+//            (unsigned int) ui16_adc_battery_current_acc_X8 ,
+//            (unsigned int) ui8_battery_current_filtered_x10 , 
+//            (unsigned int) ui16_display_data_factor
+//            );
+        if( take_action(3, 200)) SEGGER_RTT_printf(0,"dctarg=%u dc=%u    ctarg=%u cfilt=%u Throttle=%u  erps=%u run%u en=%u\r\n",
+            (unsigned int) ui8_controller_duty_cycle_target,
+            (unsigned int) ui8_g_duty_cycle,
+            (unsigned int) ui8_controller_adc_battery_current_target,
+            (unsigned int) ui8_adc_battery_current_filtered,
+            (unsigned int) ui8_throttle_adc_in,
+            (unsigned int) ui16_motor_speed_erps,
+            (unsigned int) XMC_CCU8_SLICE_IsTimerRunning(PHASE_U_TIMER_HW),
+            (unsigned int) ui8_motor_enabled
+        );
+    #endif    
     #if (DEBUG_ON_UART == 1 )
         if (new_hall) {
             ccu4_S2_timer = XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
@@ -439,10 +428,10 @@ const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
        if (take_action(7,500)) printf("Torque adc 12 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ) & 0xFFFF) );  
 
        // print batery sensor group 1 ch6 , result 4 , pin 2.4
-       //if (take_action(8,500)) printf("Battery adc 12 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 4 ) & 0xFFFF) );  
-
+       //if (take_action(8,500)) printf("                      Battery adc 12 bits=%u\r\n", (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 4 ) & 0xFFFF) );  
+        if (take_action(8,500)) printf("                      Battery mv=%u\r\n",ui16_battery_voltage_filtered_x1000);
        // print CCU4 torque is running or not
-       if (take_action(9,500)) printf("CCU4 s3= %u\r\n", XMC_CCU4_SLICE_GetTimerValue(PWM_TORQUE_TIMER_HW  ) );  
+       //if (take_action(9,500)) printf("CCU4 s3= %u\r\n", XMC_CCU4_SLICE_GetTimerValue(PWM_TORQUE_TIMER_HW  ) );  
 
        //print_hall_pattern_debug2(); // print first 100 passage in ccu8 irq0
         
@@ -452,57 +441,40 @@ const XMC_VADC_QUEUE_CONFIG_t vadc_0_group_1_queue_config2 = {
     } // end while main loop
 }
 
-/*
-void print_vadc(void) {
-    uint32_t vadc22 = 0;
-    uint32_t vadc23 = 0;
-    uint32_t vadc24 = 0;
-    uint32_t vadc25 = 0;
-    uint32_t vadc26 = 0;
-    uint32_t vadc27 = 0;
-    uint32_t vadc28 = 0;
-    uint32_t vadc29 = 0;
-    uint32_t vadc210 = 0;
-    uint32_t vadc211 = 0;
 
-    uint32_t vadc28bis = 0;
-    //uint32_t vadc29bis = 0;
-    //uint32_t vadc210bis = 0;
-    //uint32_t vadc211bis = 0;
+void jlink_print_system_state(){
+    switch (ui8_system_state) {
+        case 1: 
+            SEGGER_RTT_printf(0,"Error : overvoltage\r\n");
+            break;
+        case 2: 
+            SEGGER_RTT_printf(0,"Error : torque_sensor\r\n");
+            break;
+        case 3: 
+            SEGGER_RTT_printf(0,"Error : cadence_sensor\r\n");
+            break;
+        case 4: 
+            SEGGER_RTT_printf(0,"Error : motor_blocked\n");
+            break;
+        case 5: 
+            SEGGER_RTT_printf(0,"Error : throttle\r\n");
+            break;
+        case 6: 
+            SEGGER_RTT_printf(0,"Error : overtemperature\r\n");
+            break;
+        case 7: 
+            SEGGER_RTT_printf(0,"Error : battery_overcurrent\r\n");
+            break;
+        case 8: 
+            SEGGER_RTT_printf(0,"Error : speed_sensor\r\n");
+            break;
+        case 9: 
+            SEGGER_RTT_printf(0,"Error : motor_check\r\n");
+            break;
+             
+    }
+}    
 
-    vadc22 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ); // torque
-    vadc23 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 3 ); // unknow
-    vadc24 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 4 ); // battery
-    vadc25 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ); // throttle
-    vadc26 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 6 ); // Vcc
-    vadc27 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 7 ); // unknow
-    vadc28 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ); // current
-    vadc29 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 9 ); // current U
-    vadc210 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 10 ); // current V
-    vadc211 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 11 ); // current W
-    
-    vadc28bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ); // current
-    //vadc29bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 13 ); // current U
-    //vadc210bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 14 ); // current V
-    //vadc211bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 15 ); // current W
-    //Prints the result in UART Terminal 
-    printf("Torque= %lx \r\n", vadc22);
-    //printf("2.3= %lx \r\n", vadc23);
-    printf("Batt= %lx \r\n", vadc24);
-    printf("Throttle= %lx \r\n", vadc25);
-    //printf("2.6= %lx \r\n", vadc26);
-    //printf("2.7= %lx \r\n", vadc27);
-    printf("Current= %lx \r\n", vadc28);
-    //printf("2.9= %lx \r\n", vadc29);
-    //printf("2.10= %lx \r\n", vadc210);
-    //printf("2.11= %lx \r\n", vadc211);
-    
-    printf("Cur.bis= %lx \r\n", vadc28bis);
-    //printf("2.9bis= %lx \r\n", vadc29bis);
-    //printf("2.10bis= %lx \r\n", vadc210bis);
-    //printf("2.11bis= %lx \r\n", vadc211bis);
-}
-*/ 
 void print_system_state(){
     switch (ui8_system_state) {
         case 1: 

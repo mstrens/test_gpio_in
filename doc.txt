@@ -126,3 +126,24 @@ Then it is possible to uses code like
 - slice 0 is used to add a delay for sampling the hall sensors when a change occurs
 - slice 1 was foreseen to measure the time between 2 patterns (if valid)
 - slice 2 is used as running counter to measure the delay between last pattern change and current irq0 from ccu8  (when timer is running up)
+
+
+---------  vadc ------
+A test with a battery with 37V gives a adc = 1720. This supposes a voltage on XMC pin of 1720 * 5V / 4096 steps = 2,099V
+    Doc for tsdz2 says that a battery of 34,6V gives 1,99V on the xmc pin
+    The 2 ratios are the sample
+    So - BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 should be the same (if TSDZ8 ADC is reduced to 10 bits)
+
+
+--------  display -------
+The data being transmitted (for field Km/h on display) are in fact inverted (1/value)
+The max value transmitted that is displayed is 1000 and gives 3,7km/h on the display
+Transmitting 500 gives 7,4 kmh/h on the display.
+Lowest values to transmit are probably around 60 (so a little more than 65 km/h)
+But the values being transmitted depends on the selected diameter of the wheel.
+This diameter is transmitted by the display to the controller and the controller takes it into accout to calculate the value to transmit
+
+By default, the numerator used for conversion = 37310 (for wheel = ???)
+
+So, it is not possible to view on the display current that are less than 3,7 A (display gives then 0)
+

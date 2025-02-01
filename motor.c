@@ -110,7 +110,8 @@ static uint8_t ui8_foc_angle_multiplier = FOC_ANGLE_MULTIPLIER; //39 for 48V mot
 static uint8_t ui8_adc_foc_angle_current = 0;
 
 // battery current variables
-static uint8_t ui8_adc_battery_current_acc = 0;
+uint16_t ui16_adc_battery_current_acc_X8 = 0;
+uint16_t ui16_adc_battery_current_filtered_X8 = 0;
 static uint16_t ui16_adc_motor_phase_current = 0; // mstrens: it was uint8 in original code
 
 // ADC Values
@@ -186,7 +187,7 @@ volatile uint16_t debug_time_ccu8_irq1e = 0;
 uint8_t calibrated_offset_angle = FIRST_OFFSET_ANGLE_FOR_CALIBRATION ; 
 uint8_t calibrated_offset_angle_prev ; // used to detect an increase and so calculate current average and offset providing the min current
 #else // we are not with CALIBRATE_HALL_SENSORS process; so offset is fixed
-uint8_t calibrated_offset_angle = 28 ; // Put here the value found with the hall sensor calibration process 
+uint8_t calibrated_offset_angle = CALIBRATED_OFFSET_ANGLE ; // This value is in main.h; It is found whith hall sensor calibration process 
 #endif
 
 
@@ -463,6 +464,15 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
         if (current_hall_pattern != expected_pattern_table[previous_hall_pattern]){ // new pattern is not the expected one
             ui8_motor_commutation_type = BLOCK_COMMUTATION; // 0x00
             ui8_hall_360_ref_valid = 0;  // reset the indicator saying no error for a 360° electric rotation 
+            if (( current_hall_pattern >0 ) && (current_hall_pattern <7)) { // if hall pattern exist (not 0 not 7)    
+                // we still use the new hall position if code is in the range 1...6
+                previous_hall_pattern = current_hall_pattern; // saved to detect future change
+                // set rotor angle based on hall patern
+                ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[current_hall_pattern]; 
+                // set hall counter offset for rotor interpolation based on current hall state
+                ui8_hall_counter_offset = ui8_hall_counter_offsets[current_hall_pattern]; // to take care of the delay the hall sensor takes to switch (can be different for up and down)
+            }    
+            
             #if (CALIBRATE_HALL_SENSORS == (1))
             hall_pattern_error_counter++;
             #endif 
@@ -543,28 +553,7 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
         if (ui8_interpolation_angle > 50){  // added by mstrens because interpolation should not exceed 60°
             ui8_interpolation_angle = 21; // 21 is about 30° so mid position between 2 hall pattern changes
         }
-        /*
-        // ---------
-        // Avoid to use the slow _divulong library function.
-        // Faster implementation of the above operation based on the following assumptions:
-        // 1) ui16_a < 8192 (only 13 of 16 significants bits)
-        // 2) LSB of (ui16_a << 8) is obviously 0x00
-        // 3) The result should be less than 60 degrees. Use 180 deg (value of 128) to be safe.
-        uint8_t ui8_cnt = 7; //max 6 loops: result < 128
-        // Add Field Weakening counter offset (fw angle increases with rotor speed)
-        // note: ui16_a - ui16_b = Hall counter ticks from the last Hall sensor transition;
-        ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + ui8_hall_counter_offset) + (ui16_a - ui16_b)) << 1;
-        // here ui16_a is the hall counter ticks since last hall sensor change but with some offset corrections (*2?)
-        do {
-            ui16_a <<= 1;
-            ui8_temp <<= 1;
-            if (ui16_hall_counter_total <= ui16_a) {
-                ui16_a -= ui16_hall_counter_total;
-                ui8_temp |= (uint8_t)0x01;
-            }
-        } while (--ui8_cnt);
-        */
-    }
+    } 
     uint8_t ui8_svm_table_index = ui8_interpolation_angle + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + calibrated_offset_angle;
     
     // Phase A is advanced 240 degrees over phase B
@@ -606,7 +595,7 @@ __RAM_FUNC void CCU80_0_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
     debug_values[11] = ui8_controller_duty_cycle_target;
     debug_values[12] = ui8_controller_adc_battery_current_target ;
     debug_values[13] = calibrated_offset_angle;
-    debug_values[14] = ui8_adc_battery_current_acc;
+    debug_values[14] = ui16_adc_battery_current_acc_X8;
     
     #endif // end of CALIBRATE_HALL_SENSORS
     //XMC_GPIO_SetOutputLow(OUT_LIGHT_PORT,OUT_LIGHT_PIN); // to check the time required by this interrupt
@@ -649,25 +638,6 @@ __RAM_FUNC void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
     
     /****************************************************************************/
         // Read all ADC values (right aligned values).
-        // No overrun errors can occurs here because the conversion is started at the beginning
-        // of the PWM up interrupt and in this position is already ended.
-        /*
-        vadc22 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ); // torque gr0 ch7 result 2 in bg p2.2
-        vadc23 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 3 ); // unknown gr1 ch5 result 3      p2.3
-        vadc24 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 4 ); // battery gr1 ch6 result 4   in bg  p2.4
-        vadc25 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ); // throttle gr1 ch7 result 5  in bg  p2.5
-        vadc26 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 6 ); // VCC      gr0 ch0 result 6  in bg  p2.§
-        vadc27 = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 7 ); // unknown  gr1 ch1 result 7         p2.7
-        vadc28 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ); // current  gr0 ch1 result 8 in queue 0 p2.8
-        vadc29 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 9 ); // cur U    gr0 ch2 result 9  in bg     p2.9
-        vadc210 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 10 );// curV    gr0 ch3 result 10 in bg     p2.10
-        vadc211 = XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 11 );// curW    gr0 ch4 result 11 in bg     p2.11
-        
-        vadc28bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ); // cur bis gr1 ch0 result 12 in queue 1 p2.8
-        vadc29bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 13 ); // cur U bis gr1 ch4 result 13          p2.9
-        vadc210bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 14 );// cur V bis gr1 ch2 result 14          p2.10
-        vadc211bis = XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 15 );// cur W bis gr1 ch3 result 15          p2.11
-        */
        // adc values are reduced to 10 bits instead of 12 bits to use the same resolution as tsdz2
        // note: per vadc group, the result number is the same as the pin number (except for group 1 current sensor)
         // next line has been moved in irq 0 to save time here
@@ -686,10 +656,12 @@ __RAM_FUNC void CCU80_1_IRQHandler(){ // called when ccu8 Slice 3 reaches 840  c
         // to convert TSDZ8 steps in the same units as TSDZ2, we shoud take ADC *62/245,76 = 0,25 and divide by 4 (or >>2)
         // current is available in gr0 ch1 result 8 in queue 0 p2.8 and/or in gr0 ch0 result in 12 (p2.8)
         // here we take the average of the 2 conversions and so use >>3 instead of >>2
-        uint8_t ui8_temp_current = ((XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0x00FF) +
-                                    (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ) & 0x00FF)) >> 3  ; 
-        ui8_adc_battery_current_acc = (uint8_t)(ui8_temp_current >> 1) + (ui8_adc_battery_current_acc>>1);
-        ui8_adc_battery_current_filtered = (uint8_t)(ui8_adc_battery_current_acc >> 1) + (ui8_adc_battery_current_filtered >> 1);
+        uint16_t ui16_temp_current_X8 = ((XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 8 ) & 0x0FFF) +
+                                    (XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 12 ) & 0x0FFF)) ; 
+        
+        ui16_adc_battery_current_acc_X8 = (ui16_temp_current_X8 + ui16_adc_battery_current_acc_X8)>> 1;
+        ui16_adc_battery_current_filtered_X8 = (ui16_adc_battery_current_acc_X8 + ui16_adc_battery_current_filtered_X8) >>1;
+        ui8_adc_battery_current_filtered = (uint8_t) (ui16_adc_battery_current_filtered_X8 >> 3); // divide by 8 to have the same value as tsdz2
 
     //uint16_t temp1c  =  XMC_CCU4_SLICE_GetTimerValue(RUNNING_250KH_TIMER_HW);
     uint16_t temp1c  = (uint16_t) RUNNING_250KH_TIMER_HW->TIMER;
@@ -996,10 +968,10 @@ void update_shadow_pattern(uint8_t current_pattern){
 
 
 void motor_enable_pwm(void) { //set posif with current position & restart the timers
-    
+    /*
     uint32_t current_hall_pattern = 0;
     uint32_t expected_hall_pattern ; 
-      /*Read the input pins.*/
+    //Read the input pins.
     current_hall_pattern = XMC_GPIO_GetInput(IN_HALL0_PORT, IN_HALL0_PIN);// hall 0
     current_hall_pattern |=  XMC_GPIO_GetInput(IN_HALL1_PORT, IN_HALL1_PIN) << 1;
     current_hall_pattern |=  XMC_GPIO_GetInput(IN_HALL2_PORT, IN_HALL2_PIN) << 2;
@@ -1014,11 +986,19 @@ void motor_enable_pwm(void) { //set posif with current position & restart the ti
     XMC_POSIF_HSC_SetCurrentPattern(HALL_POSIF_HW, expected_hall_pattern); // current becomes previous expected
     expected_hall_pattern = expected_pattern_table[expected_hall_pattern]; // get next expected
     XMC_POSIF_HSC_SetExpectedPattern(HALL_POSIF_HW, expected_hall_pattern);
-
+    */
+    
+    get_hall_pattern(); // refresh hall pattern in hall_pattern_irq
+    
     // one solution to activate is to generate an event that starts all timers in a synchronized way
-    /* Enable Global Start Control CCU80  in a synchronized way*/
+    // Enable Global Start Control CCU80  in a synchronized way*/
     XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
-    // another way could be to set a flag to be used in the IRQ to force a PWM of 100% or 0% (to see wich one connect all LOW side fet)
+    XMC_SCU_SetCcuTriggerLow(SCU_GENERAL_CCUCON_GSC80_Msk);
+    uint32_t retry_start_counter = 10;
+    while ((!XMC_CCU8_SLICE_IsTimerRunning(PHASE_U_TIMER_HW)) && (retry_start_counter > 0)){ // to be sure it is running
+        XMC_SCU_SetCcuTriggerHigh(SCU_GENERAL_CCUCON_GSC80_Msk);
+        XMC_SCU_SetCcuTriggerLow(SCU_GENERAL_CCUCON_GSC80_Msk);
+    }
 }
 
 void motor_disable_pwm(void) {
@@ -1026,27 +1006,13 @@ void motor_disable_pwm(void) {
     XMC_CCU8_SLICE_StopClearTimer(PHASE_U_TIMER_HW);
     XMC_CCU8_SLICE_StopClearTimer(PHASE_V_TIMER_HW);
     XMC_CCU8_SLICE_StopClearTimer(PHASE_W_TIMER_HW);
-    // CCU8_3 is not stopped becauses it is required to manage some tasks (speed, torque,...) 
-    //printf("CCU8 slice 0-3 are stopped\r\n");  // just to debug
+    // slice CCU8_3 is not stopped becauses it is required to manage some tasks (speed, torque,...) 
 }
 
-
-
-
-
-// calculate an average speed based on the capture values
-// for each capture value for a given pattern:
-// substract from a total the current value in an array with index = current pattern
-// add the new value to this total
-// store the new value in this array at the same index.
-// multiply the total by the prescaler
-// 
-
-// there must be a way to check if the motor is locked
-// in tsdz2 there is a test if speed is lees than X and current is more than X
-
-
-// there must be also a protection for over current
-// there could be 2 checks
-// if current exceed a value (shortcut), we stop the motor immédiately
-// if current exceed a value for more than X time, the motor stop
+void get_hall_pattern(){
+    uint32_t critical_section_value = XMC_EnterCriticalSection();
+    hall_pattern_irq = XMC_GPIO_GetInput(IN_HALL0_PORT, IN_HALL0_PIN);// hall 0
+    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL1_PORT, IN_HALL1_PIN) << 1;
+    hall_pattern_irq |=  XMC_GPIO_GetInput(IN_HALL2_PORT, IN_HALL2_PIN) << 2;
+    XMC_ExitCriticalSection(critical_section_value);
+}

@@ -12,10 +12,25 @@
 #include "config.h"
 #include "common.h"
 
-//#define TIME_DEBUG
-//#define HALL_DEBUG
 
-//#define FW_VERSION 15 // mspider65
+#define TEST_WITH_FIXED_PARAMETERS (1)  // for testing without speed sensor, torque sensor nor Throttle, we use here fixed parameters
+        // fixed parameters are set up here below (PWM_DUTY_CYCLE_MAX, FIRST_OFFSET_ANGLE_FOR_CALIBRATION , CALIBRATE_OFFSET_STEP)
+#define CALIBRATE_HALL_SENSORS (1) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
+#define DEBUG_ON_UART          (0)  // when 0, no printf messages are sent on uart
+#define DEBUG_ON_JLINK         (1)  // when 1, messages are generated on jlink
+
+// duty cycle
+#if ((TEST_WITH_FIXED_PARAMETERS == 1) || (CALIBRATE_HALL_SENSORS == 1)) 
+#define PWM_DUTY_CYCLE_MAX	240  // for testing with fix duty cycle or for calibration of hall sensors
+#else
+#define PWM_DUTY_CYCLE_MAX	255   // it is normally 255 but this seems to high because we exceed the max timer value 
+#endif
+#define PWM_DUTY_CYCLE_STARTUP	30    // Initial PWM Duty Cycle at motor startup
+
+// set step on 0 and first offset on a value if you want to use CALIBRATE_HALL_SENSORS with a fixed offset
+#define FIRST_OFFSET_ANGLE_FOR_CALIBRATION 25 //17 // This is the first value used for calibration; it increases every 4 sec
+#define CALIBRATE_OFFSET_STEP 0     // 1// step used when increasing the calibrated_offset_angle (normally 1; could be set to 0 for some kind of test)
+#define CALIBRATED_OFFSET_ANGLE 28   // this is the value provided by the hall sensor offset calibration process
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
@@ -98,23 +113,6 @@
 #define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN			(uint16_t)((uint32_t)PWM_CYCLES_SECOND*1000U/477U) // 32767@15625KHz could be a bigger number but will make for a slow detection of stopped wheel speed
 
 
-#define TEST_WITH_FIXED_PARAMETERS (1)  // for testing without speed sensor, torque sensor nor Throttle, we use here fixed parameters
-        // Most fixed parameters are set up in ebike_app.c but to avoid lot of program changes, we also set here a reduced value to PWM_DUTY_CYCLE_MAX)
-#define CALIBRATE_HALL_SENSORS (1) // 1 is to calibrate the hall sensor positions and find the best general offset and the corections for each hall pattern
-#define DEBUG_ON_UART                     (1)  // when 0, no printf messages are sent on uart
-
-// duty cycle
-#if ((TEST_WITH_FIXED_PARAMETERS == 1) || (CALIBRATE_HALL_SENSORS == 1)) 
-#define PWM_DUTY_CYCLE_MAX	80  // for testing with fix duty cycle or for calibration of hall sensors
-#else
-#define PWM_DUTY_CYCLE_MAX	255   // it is normally 255 but this seems to high because we exceed the max timer value 
-#endif
-#define PWM_DUTY_CYCLE_STARTUP	30    // Initial PWM Duty Cycle at motor startup
-
-// set step on 0 and first offset on a value if you want to use the flag calibration with a fixed offset
-#define FIRST_OFFSET_ANGLE_FOR_CALIBRATION 25 //17 // This is the first value used for calibration; it increases every 4 sec
-#define CALIBRATE_OFFSET_STEP 0     // 1// step used when increasing the calibrated_offset_angle (normally 1; could be set to 0 for some kind of test)
-#define CALIBRATED_OFFSET_ANGLE 28   // this is the value provided by the hall sensor offset calibration process
 
 
 // ----------------------------------------------------------------------------------------------------------------
@@ -302,13 +300,13 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define DATA_INDEX_ARRAY_DIM				6
 
 // delay lights function (0.1 sec)
-#define DELAY_LIGHTS_ON				 	DELAY_MENU_ON
+#define DELAY_LIGHTS_ON				 	DELAY_MENU_ON    // 5sec
 
 // delay function status (0.1 sec)
-#define DELAY_FUNCTION_STATUS			        (uint8_t) (DELAY_MENU_ON / 2)
+#define DELAY_FUNCTION_STATUS			        (uint8_t) (DELAY_MENU_ON / 2)  //2,5 sec
 
 // delay torque sensor calibration (0.1 sec)
-#define DELAY_DISPLAY_TORQUE_CALIBRATION		250
+#define DELAY_DISPLAY_TORQUE_CALIBRATION		250  // 25 sec
 
 // display function status
 #define FUNCTION_STATUS_OFF				1

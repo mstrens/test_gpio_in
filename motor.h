@@ -52,3 +52,5 @@ void update_shadow_pattern(uint8_t current_pattern);
 
 void motor_enable_pwm(void) ;
 void motor_disable_pwm(void) ;
+
+void get_hall_pattern();

@@ -36,13 +36,13 @@ static const uint8_t ui8_default_array[EEPROM_BYTES_STORED] =
   TORQUE_SENSOR_ADV_ON_STARTUP					// 19 + EEPROM_BASE_ADDRESS
 };
 
-// riding modes
+// riding modes for documentation (define is done in common.h)
 //#define OFF_MODE                                  0 // not used
 //#define POWER_ASSIST_MODE                         1
 //#define TORQUE_ASSIST_MODE                        2
 //#define CADENCE_ASSIST_MODE                       3
 //#define eMTB_ASSIST_MODE                          4
-//#define HYBRID_ASSIST_MODE						  5
+//#define HYBRID_ASSIST_MODE						            5
 //#define CRUISE_MODE                               6
 //#define WALK_ASSIST_MODE                          7
 //#define TORQUE_SENSOR_CALIBRATION_MODE            8								   

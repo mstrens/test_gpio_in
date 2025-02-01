@@ -14,8 +14,6 @@
 #include "common.h"
 #include "uart.h"
 
-
-
 volatile struct_configuration_variables m_configuration_variables;
 
 // display menu
@@ -480,9 +478,18 @@ static void ebike_control_motor(void) // is called every 25ms by ebike_app_contr
 	#if (CALIBRATE_HALL_SENSORS == 1) || ( TEST_WITH_FIXED_PARAMETERS == 1) // for testing we use here fixed parameters (! to fix duty cycle, we set a fixed value to PWM_DUTY_CYCLE_MAX)
 	ui8_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT;     // 194
     ui8_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_DEFAULT;  //73
-    ui8_adc_battery_current_target = (1); // set on 8 for testing but does not really matter because we do not reach this value
-											// 1 adc10bits = 0,16A so 8 = 1A = 1/0.16=6 : but there is an offset of about 2
-    // set duty cycle target
+    // Note : this code suppose that Throttle is connected 
+	
+	uint8_t adc_throttle_for_test = ((XMC_VADC_GROUP_GetResult(vadc_0_group_1_HW , 5 ) & 0x0FFF) >> 4); // throttle gr1 ch7 result 5   pin 2.5
+	if (( adc_throttle_for_test < 5) || (adc_throttle_for_test > 50) ) {// throttle gr1 ch7 result 5   pin 2.5
+		ui8_adc_battery_current_target = (1); // set on 8 for testing but does not really matter because we do not reach this value									
+	} else {
+		ui8_adc_battery_current_target =  0;
+	}
+	
+	//ui8_adc_battery_current_target = (1); // set on 8 for testing but does not really matter because we do not reach this value									
+	
+	// set duty cycle target
 	if (ui8_adc_battery_current_target) {
 		ui8_duty_cycle_target = PWM_DUTY_CYCLE_MAX;  // set to 80 in main.h
 	}
@@ -509,6 +516,7 @@ static void ebike_control_motor(void) // is called every 25ms by ebike_app_contr
 
     // select optional ADC function
 	#if (OPTIONAL_ADC_FUNCTION == THROTTLE_CONTROL)   // in some cases, it can increase the target current and change duty_cyle and ramp up/down
+		// note: it never decreases the target current set in a previous function based on the riding mode 
 	if (ui8_throttle_mode_array[m_configuration_variables.ui8_street_mode_enabled]) { //  0 means that Throttle is "disabled"
 		apply_throttle();
 	}
@@ -1384,7 +1392,7 @@ static void apply_throttle(void)
 			}
           break;
 		default:
-          break;
+          break;  
 	}
 	
 	// map ADC throttle value from 0 to max battery current
@@ -1557,7 +1565,7 @@ static void get_battery_voltage(void)
     static uint16_t ui16_adc_battery_voltage_accumulated;
 	
     // low pass filter the voltage readed value, to avoid possible fast spikes/noise
-    ui16_adc_battery_voltage_accumulated -= ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
+    ui16_adc_battery_voltage_accumulated -= ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT; // 2
     ui16_adc_battery_voltage_accumulated += ui16_adc_voltage;
 	ui16_battery_voltage_filtered_x1000 = (ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT) * BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000;
 }
@@ -1571,12 +1579,10 @@ static void get_battery_voltage(void)
 	uint16_t ui16_temp = 0;
 	// this has been moved from motor.c to here in order to save time in the irq; >>2 is to go from ADC 12 bits to 10 bits like TSDZ2
 	ui16_adc_torque   = (XMC_VADC_GROUP_GetResult(vadc_0_group_0_HW , 2 ) & 0xFFFF) >> 2; // torque gr0 ch7 result 2 in bg p2.2
-        
     if (toffset_cycle_counter < TOFFSET_CYCLES) {   // at start up get average on 3 sec
-        uint16_t ui16_tmp = ui16_adc_torque; // ui16_adc_torque is captured in motor.h ; it could best be captured here
+        uint16_t ui16_tmp = ui16_adc_torque; 
         ui16_adc_pedal_torque_offset_init = filter(ui16_tmp, ui16_adc_pedal_torque_offset_init, 2);
         toffset_cycle_counter++;
-		
 		// check that offset after TOFFSET_CYCLES is _30/+30 regarding the calibration value (if any)
 		if ((toffset_cycle_counter == TOFFSET_CYCLES)&&(ui8_torque_sensor_calibrated)) {
 			if ((ui16_adc_pedal_torque_offset_init > ui16_adc_pedal_torque_offset_min)&& 
@@ -1587,7 +1593,6 @@ static void get_battery_voltage(void)
 				ui8_adc_pedal_torque_offset_error = 1;
 			}
 		}
-		
         ui16_adc_pedal_torque = ui16_adc_pedal_torque_offset_init;
 		ui16_adc_pedal_torque_offset_cal = ui16_adc_pedal_torque_offset_init + ADC_TORQUE_SENSOR_CALIBRATION_OFFSET; // 6
 	}

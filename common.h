@@ -13,6 +13,8 @@
 #include "cybsp.h"
 #include "cy_utils.h"
 
+#include "SEGGER_RTT.h"
+
 // riding modes
 #define OFF_MODE                                  0 // not used
 #define POWER_ASSIST_MODE                         1

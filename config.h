@@ -18,8 +18,25 @@
 #define WALK_ASSIST_MODE                          7
 #define TORQUE_SENSOR_CALIBRATION_MODE            8								   
 */
+/*
+Index of the data too display
+ui16_battery_SOC_percentage_x10          1
+ui16_battery_voltage_calibrated_x10      2
+ui8_battery_current_filtered_x10         3
+ui16_battery_power_filtered_x10          4
+ui16_adc_throttle                        5
+ui16_adc_torque                          6
+ui8_pedal_cadence_RPM                    7
+ui16_human_power_filtered_x10            8
+ui16_adc_pedal_torque_delta              9
+ui32_wh_x10                              10
+ui16_motor_speed_erps                    11
+ui16_duty_cycle_percent                  12
+*/
 
-#define MOTOR_TYPE 0  // 0 = 48V, 1 = 36V
+
+
+#define MOTOR_TYPE 0              // 0 = 48V, 1 = 36V ; is used to change the FOC_ANGLE_MULTIPLIER in main.h
 #define TORQUE_SENSOR_CALIBRATED 0
 #define MOTOR_ACCELERATION  35
 #define MOTOR_ASSISTANCE_WITHOUT_PEDAL_ROTATION 0 // when enabled (1), assistance is provided when the pedal is pressed more than the thershold herafer
@@ -29,15 +46,15 @@
 #define STARTUP_BOOST_TORQUE_FACTOR 300
 #define MOTOR_BLOCKED_COUNTER_THRESHOLD 2
 #define MOTOR_BLOCKED_BATTERY_CURRENT_THRESHOLD_X10 5  // mstrens it was 30 for tsdz2, reduce it for testing
-#define MOTOR_BLOCKED_ERPS_THRESHOLD 10               // mstrens it was 20 for tsdz2, TSDZ8 has 4 poles instead of 8, so 2 more ticks for the same speed
+#define MOTOR_BLOCKED_ERPS_THRESHOLD 10       // electric RPS mstrens it was 20 for tsdz2, TSDZ8 has 4 poles instead of 8, so 2 more ticks for the same speed
 
 #define STARTUP_BOOST_CADENCE_STEP 20       
-#define BATTERY_CURRENT_MAX        5                     // mstrens: it was 13 for tsdz2, reduce for testing
+#define BATTERY_CURRENT_MAX        5          // A mstrens: it was 13 for tsdz2, reduce for testing
 #define TARGET_MAX_BATTERY_POWER 500
 #define TARGET_MAX_BATTERY_CAPACITY 500
-#define BATTERY_CELLS_NUMBER 13
+#define BATTERY_CELLS_NUMBER 10               // mstrens 10 for 36V battery and 13 for 48V battery
 #define MOTOR_DECELERATION 35
-#define BATTERY_LOW_VOLTAGE_CUT_OFF 10          // mstrens : it was 39, changed to 10V for testing
+#define BATTERY_LOW_VOLTAGE_CUT_OFF 30          // Volt mstrens : it was 39, changed to 10V for testing// could use 30 for 36 batt and 39 for 48V battery
 #define ACTUAL_BATTERY_VOLTAGE_PERCENT 100
 #define ACTUAL_BATTERY_CAPACITY_PERCENT 90
 #define LI_ION_CELL_OVERVOLT 4.35
@@ -53,9 +70,9 @@
 #define LI_ION_CELL_VOLTS_1_OF_6 3.26
 #define LI_ION_CELL_VOLTS_EMPTY 3.10
 #define WHEEL_PERIMETER 2200
-#define WHEEL_MAX_SPEED 25
+#define WHEEL_MAX_SPEED 25         // km/h
 #define ENABLE_LIGHTS 1
-#define ENABLE_WALK_ASSIST 1
+#define ENABLE_WALK_ASSIST 1       // 1 enable
 #define ENABLE_BRAKE_SENSOR 1
 #define ENABLE_THROTTLE 1          // 1 enable
 #define ENABLE_TEMPERATURE_LIMIT 0
@@ -65,7 +82,7 @@
 #define STARTUP_BOOST_ON_STARTUP 1
 #define TORQUE_SENSOR_ADV_ON_STARTUP 0
 #define LIGHTS_CONFIGURATION_ON_STARTUP 0
-#define RIDING_MODE_ON_STARTUP 1 // 
+#define RIDING_MODE_ON_STARTUP 3     // CADENCE_ASSIST_MODE= 3
 #define LIGHTS_CONFIGURATION_1 1
 #define LIGHTS_CONFIGURATION_2 9
 #define LIGHTS_CONFIGURATION_3 10
@@ -90,18 +107,38 @@
 #define COASTER_BRAKE_TORQUE_THRESHOLD 30
 #define ENABLE_AUTO_DATA_DISPLAY 1
 #define STARTUP_ASSIST_ENABLED 0
+
+#define AUTO_DATA_NUMBER_DISPLAY 6         // number of data to display in sequence (max 6)
 #define DELAY_DISPLAY_DATA_1 50
 #define DELAY_DISPLAY_DATA_2 50
 #define DELAY_DISPLAY_DATA_3 50
 #define DELAY_DISPLAY_DATA_4 50
 #define DELAY_DISPLAY_DATA_5 50
 #define DELAY_DISPLAY_DATA_6 50
-#define DISPLAY_DATA_1 1
-#define DISPLAY_DATA_2 2
-#define DISPLAY_DATA_3 10
-#define DISPLAY_DATA_4 7
-#define DISPLAY_DATA_5 4
-#define DISPLAY_DATA_6 8
+#define DISPLAY_DATA_1 2             // ui16_battery_SOC_percentage_x10
+#define DISPLAY_DATA_2 3             // ui16_battery_voltage_calibrated_x10
+#define DISPLAY_DATA_3 2             // ui32_wh_x10 
+#define DISPLAY_DATA_4 3              // ui8_pedal_cadence_RPM
+#define DISPLAY_DATA_5 2              // ui16_battery_power_filtered_x10
+#define DISPLAY_DATA_6 3              // ui16_human_power_filtered_x10
+/*
+Index of the data too display
+ui16_battery_SOC_percentage_x10          1
+ui16_battery_voltage_calibrated_x10      2
+ui8_battery_current_filtered_x10         3
+ui16_battery_power_filtered_x10          4
+ui16_adc_throttle                        5
+ui16_adc_torque                          6
+ui8_pedal_cadence_RPM                    7
+ui16_human_power_filtered_x10            8
+ui16_adc_pedal_torque_delta              9
+ui32_wh_x10                              10
+ui16_motor_speed_erps                    11
+ui16_duty_cycle_percent                  12
+*/
+
+
+
 #define POWER_ASSIST_LEVEL_1 50
 #define POWER_ASSIST_LEVEL_2 100
 #define POWER_ASSIST_LEVEL_3 160
@@ -132,7 +169,6 @@
 #define CRUISE_MODE_WALK_ENABLED 0
 #define CRUISE_THRESHOLD_SPEED 10
 #define PEDAL_TORQUE_ADC_OFFSET 150        // to be tested; it is the ADC value when no pressured is applied on the pedal
-#define AUTO_DATA_NUMBER_DISPLAY 3
 #define UNITS_TYPE 0
 #define ASSIST_THROTTLE_MIN_VALUE 0        // adc values are mapped between min and max values
 #define ASSIST_THROTTLE_MAX_VALUE 255

@@ -3,8 +3,6 @@
 
 
 change some parameters (max current, battery volt,...)    
-    - BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 (to change in main.h) Currently 87 mvolt/adc10bits; in tsdz8, value is not linear between 5,12,36V????
-        DIFFERENCE_CUT_OFF_SHUTDOWN_10_BIT should perhaps also be changed if ratio is different
     - change BATTERY_LOW_VOLTAGE_CUT_OFF ; set to 10V for testing, but was 39 for 48V battery
         - we also have ui16_adc_voltage_cut_off = 300*100/BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000; // 30Volt default value (at least for testing)
     - pehaps ui8_pedal_torque_per_10_bit_ADC_step_x100 has to be adapted
@@ -35,6 +33,7 @@ After debugging :
     furthermore in motor.c, the code that increases the g_duty_cycle does not take action whe g_duty_cycle is at 255
     So current can exceed the max; 
     For testing, I reduced PWM_DUTY_CYCLE_MAX to 128 in main.h 
+- replace prinf on serial by prinf on jlink (e.g. for calibration of hall sensor)
 
 Test code to read and use torque sensor signal
 Test code for Wheel speed sensor detection
@@ -95,4 +94,7 @@ done:
         - it was 20 for tsdz2 ; it becomes 10 for tsdz8 (4 poles instead of 8) because TSDZ8 has less erps for the same rps
 - MOTOR_BLOCKED_ERPS_THRESHOLD to be changed perhaps because pole is different
         - it was 20 in tsdz2; reduced to 10 for tsdz8 (4 poles instead of 8) because TSDZ8 has less erps for the same rps
-        
+- BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 (to change in main.h) 
+    With TSDZ8, when battery voltage is 37V, ADC 12 bits is 1720 so 430 in ADC 10 bits
+    37000mv/430 = 86: So 87 mvolt/adc10bits from TSDZ2 is OK
+            

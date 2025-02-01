@@ -1445,8 +1445,9 @@
                         <Param id="ReceiverInterruptSRSel" value="0"/>
                         <Param id="ReceiverNoiseDetectionEvent" value="false"/>
                         <Param id="ReceiverStartInterrupt" value="false"/>
+                        <Param id="RxFIFOLimit" value="31"/>
                         <Param id="RxFIFOPointer" value="0"/>
-                        <Param id="RxFIFOSize" value="XMC_USIC_CH_FIFO_DISABLED"/>
+                        <Param id="RxFIFOSize" value="XMC_USIC_CH_FIFO_SIZE_32WORDS"/>
                         <Param id="SamplePoint" value="8"/>
                         <Param id="ShowSystemRelatedConnections" value="false"/>
                         <Param id="StandardReceiveBufferEvent" value="false"/>
@@ -1464,8 +1465,9 @@
                         <Param id="TransmitShiftInterrupt" value="false"/>
                         <Param id="TransmitShiftInterruptSRSel" value="0"/>
                         <Param id="TransmitterFrameFinishedEvent" value="false"/>
-                        <Param id="TxFIFOPointer" value="16"/>
-                        <Param id="TxFIFOSize" value="XMC_USIC_CH_FIFO_DISABLED"/>
+                        <Param id="TxFIFOLimit" value="31"/>
+                        <Param id="TxFIFOPointer" value="32"/>
+                        <Param id="TxFIFOSize" value="XMC_USIC_CH_FIFO_SIZE_32WORDS"/>
                         <Param id="configuration" value="auto"/>
                         <Param id="inFlash" value="true"/>
                     </Parameters>
